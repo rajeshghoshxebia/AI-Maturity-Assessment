@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.question import Question
     from app.models.user import User
     from app.models.dimension import Dimension
+    from app.models.survey import SurveyInvitation
 
 
 class Response(UUIDMixin, Base):
@@ -26,6 +27,9 @@ class Response(UUIDMixin, Base):
     )
     respondent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    invitation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("survey_invitations.id", ondelete="SET NULL"), nullable=True, index=True
     )
     score: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 1-5
     observations: Mapped[str | None] = mapped_column(Text, nullable=True)

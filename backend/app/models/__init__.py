@@ -4,6 +4,7 @@ from app.models.dimension import Dimension, TechSubcategory
 from app.models.question import Question, CompetencyLevel
 from app.models.assessment import Assessment, AssessmentMode, AssessmentStatus, AssessmentSubcategory
 from app.models.response import Response, SurveyAssignment
+from app.models.survey import SurveyInvitation
 
 __all__ = [
     "Tenant", "User", "UserRole",
@@ -11,4 +12,5 @@ __all__ = [
     "Question", "CompetencyLevel",
     "Assessment", "AssessmentMode", "AssessmentStatus", "AssessmentSubcategory",
     "Response", "SurveyAssignment",
+    "SurveyInvitation",
 ]

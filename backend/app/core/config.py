@@ -14,8 +14,15 @@ class Settings(BaseSettings):
     ACS_CONNECTION_STRING: str = ""
     ACS_SENDER_EMAIL: str = "no-reply@xebia.com"
 
+    # Comma-separated list of allowed frontend origins e.g. https://myapp.vercel.app
+    ALLOWED_ORIGINS: str = "http://localhost:3000"
+
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
     @property
     def is_production(self) -> bool:

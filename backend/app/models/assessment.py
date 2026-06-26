@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.user import User
     from app.models.response import Response, SurveyAssignment
     from app.models.dimension import TechSubcategory
+    from app.models.survey import SurveyInvitation
 
 
 class AssessmentMode(str, enum.Enum):
@@ -49,6 +50,9 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
     survey_assignments: Mapped[list["SurveyAssignment"]] = relationship("SurveyAssignment", back_populates="assessment")
     active_subcategories: Mapped[list["AssessmentSubcategory"]] = relationship(
         "AssessmentSubcategory", back_populates="assessment"
+    )
+    invitations: Mapped[list["SurveyInvitation"]] = relationship(
+        "SurveyInvitation", back_populates="assessment", order_by="SurveyInvitation.created_at"
     )
 
 

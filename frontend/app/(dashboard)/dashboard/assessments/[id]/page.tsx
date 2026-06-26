@@ -3,10 +3,120 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, ChevronDown, ChevronUp, BarChart2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, ChevronDown, ChevronUp, BarChart2, Mail, Trash2, Copy, Check } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
 import type { Assessment, Dimension, ResponseOut, ScoreOut, ResponseUpsert } from "@/types/assessment";
+
+interface Invitation {
+  id: string;
+  email: string;
+  name: string | null;
+  status: "PENDING" | "COMPLETED" | "REVOKED";
+  sent_at: string | null;
+  completed_at: string | null;
+  survey_url: string | null;
+}
+
+const STATUS_STYLE: Record<string, string> = {
+  PENDING: "bg-blue-50 text-blue-700",
+  COMPLETED: "bg-green-50 text-green-700",
+  REVOKED: "bg-grey-100 text-grey-400",
+};
+
+function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName: string }) {
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [emails, setEmails] = useState("");
+  const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<Invitation[]>(`/assessments/${assessmentId}/invitations`).then(setInvitations).catch(() => {});
+  }, [assessmentId]);
+
+  async function sendInvites() {
+    const lines = emails.split(/[\n,;]+/).map((e) => e.trim()).filter(Boolean);
+    if (!lines.length) return;
+    setSending(true);
+    try {
+      const invitees = lines.map((line) => {
+        const match = line.match(/^(.+?)\s*<(.+?)>$/);
+        return match ? { name: match[1].trim(), email: match[2].trim() } : { email: line, name: undefined };
+      });
+      const result = await api.post<Invitation[]>(`/assessments/${assessmentId}/invitations`, { invitees });
+      setInvitations((prev) => {
+        const map = new Map(prev.map((i) => [i.id, i]));
+        result.forEach((i) => map.set(i.id, i));
+        return Array.from(map.values());
+      });
+      setEmails("");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function revoke(invId: string) {
+    await api.delete(`/assessments/${assessmentId}/invitations/${invId}`);
+    setInvitations((prev) => prev.map((i) => i.id === invId ? { ...i, status: "REVOKED" as const } : i));
+  }
+
+  function copyLink(url: string, id: string) {
+    navigator.clipboard.writeText(url);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  return (
+    <div className="card space-y-4">
+      <div>
+        <h3 className="font-semibold text-grey-900 flex items-center gap-2"><Mail className="h-4 w-4 text-velvet" /> Invite Stakeholders</h3>
+        <p className="text-xs text-grey-500 mt-0.5">Enter email addresses (one per line, or comma-separated). Optionally include names: <code className="bg-grey-100 px-1 rounded">Jane Smith &lt;jane@company.com&gt;</code></p>
+      </div>
+      <textarea
+        rows={4}
+        value={emails}
+        onChange={(e) => setEmails(e.target.value)}
+        placeholder={"alice@company.com\nBob Jones <bob@company.com>"}
+        className="w-full rounded-md border border-grey-200 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet font-mono"
+      />
+      <button
+        onClick={sendInvites}
+        disabled={sending || !emails.trim()}
+        className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50"
+      >
+        {sending ? "Sending…" : "Send Survey Links"}
+      </button>
+
+      {invitations.filter((i) => i.status !== "REVOKED").length > 0 && (
+        <div className="border-t border-grey-100 pt-4 space-y-2">
+          <p className="text-xs font-medium text-grey-600 uppercase tracking-wide">Invitations sent</p>
+          {invitations.filter((i) => i.status !== "REVOKED").map((inv) => (
+            <div key={inv.id} className="flex items-center gap-3 rounded-md bg-grey-50 px-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-grey-800 truncate">{inv.name ? `${inv.name} <${inv.email}>` : inv.email}</p>
+                <p className="text-xs text-grey-500 mt-0.5">
+                  {inv.sent_at ? `Sent ${new Date(inv.sent_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Not sent"}
+                  {inv.completed_at && ` · Completed ${new Date(inv.completed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`}
+                </p>
+              </div>
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[inv.status]}`}>{inv.status}</span>
+              {inv.survey_url && (
+                <button onClick={() => copyLink(inv.survey_url!, inv.id)} title="Copy survey link" className="text-grey-400 hover:text-velvet transition-colors">
+                  {copied === inv.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </button>
+              )}
+              {inv.status === "PENDING" && (
+                <button onClick={() => revoke(inv.id)} title="Revoke invitation" className="text-grey-400 hover:text-red-500 transition-colors">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -171,6 +281,11 @@ export default function AssessmentDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Survey invite panel — only for SURVEY mode */}
+      {assessment.mode === "SURVEY" && (
+        <InvitePanel assessmentId={id} orgName={assessment.organization_name} />
+      )}
 
       {/* Dimensions + questions */}
       <div className="space-y-2">
