@@ -1,0 +1,106 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { signIn } from "@/lib/auth";
+
+const IS_DEV = !process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSignIn() {
+    setLoading(true);
+    setError(null);
+    try {
+      if (IS_DEV) {
+        // Dev mode: no Azure AD — go straight to dashboard
+        router.push("/dashboard");
+        return;
+      }
+      await signIn();
+      router.push("/dashboard");
+    } catch {
+      setError("Sign-in failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-blue-dark flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        {/* Brand mark */}
+        <div className="text-center mb-10">
+          <p className="text-velvet-light text-sm font-medium uppercase tracking-widest mb-2">
+            Xebia
+          </p>
+          <h1 className="text-3xl font-semibold text-white">
+            AI Maturity Assessment
+          </h1>
+          <p className="text-white/50 mt-2 text-sm">
+            Enterprise AI readiness in 7 dimensions
+          </p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-xl p-8 shadow-elevated">
+          <h2 className="text-lg font-semibold text-grey-900 mb-1">
+            Sign in to continue
+          </h2>
+          <p className="text-sm text-grey-500 mb-6">
+            {IS_DEV
+              ? "Development mode — Azure AD not configured."
+              : "Use your Microsoft 365 account to access the platform."}
+          </p>
+
+          {IS_DEV && (
+            <div className="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              Dev mode active. Click below to sign in as <strong>dev@xebia.com</strong>.
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleSignIn}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 rounded-md bg-velvet px-4 py-2.5 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-60"
+          >
+            {loading ? (
+              "Signing in…"
+            ) : IS_DEV ? (
+              "Continue as Dev User →"
+            ) : (
+              <>
+                <MicrosoftIcon />
+                Sign in with Microsoft
+              </>
+            )}
+          </button>
+        </div>
+
+        <p className="text-center text-white/30 text-xs mt-6">
+          © {new Date().getFullYear()} Xebia. All rights reserved.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MicrosoftIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+    </svg>
+  );
+}

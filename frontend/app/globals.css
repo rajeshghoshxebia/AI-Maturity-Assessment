@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Xebia Suisse Intl (system-font fallback — replace with actual font files) ── */
+@layer base {
+  :root {
+    /* Brand tokens as CSS variables for use outside Tailwind */
+    --velvet: #831B84;
+    --velvet-dark: #5A0F5A;
+    --velvet-light: #A84CA9;
+    --velvet-subtle: #F5E8F5;
+    --blue-dark: #150027;
+
+    --grey-50: #F9F9F9;
+    --grey-100: #F2F2F2;
+    --grey-200: #E5E5E5;
+    --grey-500: #737373;
+    --grey-700: #404040;
+    --grey-900: #171717;
+
+    /* shadcn/ui CSS variable mapping */
+    --background: 0 0% 100%;
+    --foreground: 270 100% 8%;          /* blue-dark */
+    --card: 0 0% 100%;
+    --card-foreground: 270 100% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 270 100% 8%;
+    --primary: 300 67% 31%;             /* velvet */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 270 100% 8%;           /* blue-dark */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 95%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 300 67% 31%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 300 67% 31%;
+    --radius: 0.375rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+  }
+}
+
+/* ── Utility classes ──────────────────────────────────────────────────── */
+@layer components {
+  .sidebar {
+    @apply w-sidebar bg-blue-dark text-white flex flex-col fixed inset-y-0 left-0 z-40;
+  }
+
+  .topbar {
+    @apply h-topbar bg-white border-b border-grey-200 flex items-center px-6 sticky top-0 z-30;
+  }
+
+  .page-container {
+    @apply ml-sidebar pt-topbar min-h-screen bg-grey-50;
+  }
+
+  .card {
+    @apply bg-white rounded-lg border border-grey-200 shadow-card p-6;
+  }
+
+  .maturity-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .maturity-planning     { @apply bg-red-100 text-red-700; }
+  .maturity-experimenting { @apply bg-orange-100 text-orange-700; }
+  .maturity-standardizing { @apply bg-yellow-100 text-yellow-700; }
+  .maturity-scaling      { @apply bg-green-100 text-green-700; }
+  .maturity-optimizing   { @apply bg-velvet-subtle text-velvet; }
+}

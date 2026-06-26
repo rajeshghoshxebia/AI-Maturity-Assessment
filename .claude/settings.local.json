@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/xeadmin/AppData/Roaming/Claude/local-agent-mode-sessions/skills-plugin/f7742ffb-1679-4f56-a8fc-f267eec31bb0/c35004f6-2fef-422f-9908-86eecbad7dce/skills/xlsx/**)",
+      "Bash(python -c ' *)",
+      "Bash(pip install *)",
+      "PowerShell(pip install pandas openpyxl -q)",
+      "PowerShell(python -m pip install pandas openpyxl -q)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "mcp__visualize__show_widget",
+      "Bash(npm --version)",
+      "PowerShell(python -m pip --version 2>&1)",
+      "PowerShell(docker --version 2>&1)",
+      "PowerShell(psql -U postgres -c \"\\\\l\" 2>&1)",
+      "Bash(ls \"/c/Program Files/PostgreSQL/18/bin/\" | grep psql)",
+      "Bash('/c/Program Files/PostgreSQL/18/bin/psql.exe' -U postgres -c '\\\\l')",
+      "PowerShell(& \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\psql.exe\" -U postgres -c \"\\\\l\" 2>&1)",
+      "PowerShell(& \"C:\\\\Program Files\\\\PostgreSQL\\\\18\\\\bin\\\\createdb.exe\" --help 2>&1)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing 2>&1)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/dashboard\" -UseBasicParsing 2>&1)",
+      "PowerShell(Invoke-WebRequest -Uri \"http://localhost:3000/\" -UseBasicParsing 2>&1 | Select-Object StatusCode, @{N='preview';E={$_.Content.Substring\\(0,[Math]::Min\\(200,$_.Content.Length\\)\\)}})"
+    ]
+  }
+}
