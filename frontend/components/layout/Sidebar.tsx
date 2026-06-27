@@ -8,11 +8,14 @@ import {
   ClipboardList,
   Home,
   LogOut,
+  Menu,
   Settings,
   Users,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth";
+import { useState, useEffect } from "react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -24,15 +27,32 @@ const nav = [
 
 export function Sidebar() {
   const path = usePathname();
+  const [open, setOpen] = useState(false);
 
-  return (
-    <aside className="sidebar">
+  // Close sidebar on route change (mobile nav)
+  useEffect(() => { setOpen(false); }, [path]);
+
+  // Prevent body scroll when sidebar open on mobile
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
+
+  const navContent = (
+    <>
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10">
-        <span className="text-white font-semibold text-lg tracking-tight">
-          Xebia
-        </span>
-        <p className="text-white/50 text-xs mt-0.5">AI Maturity Platform</p>
+      <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
+        <div>
+          <span className="text-white font-semibold text-lg tracking-tight">Xebia</span>
+          <p className="text-white/50 text-xs mt-0.5">AI Maturity Platform</p>
+        </div>
+        <button
+          className="md:hidden text-white/60 hover:text-white"
+          onClick={() => setOpen(false)}
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Nav */}
@@ -78,6 +98,38 @@ export function Sidebar() {
           Sign out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        className="md:hidden fixed top-4 left-4 z-50 rounded-md p-2 bg-blue-dark text-white shadow-md"
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50"
+          onClick={() => setOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — fixed on desktop, slide-in drawer on mobile */}
+      <aside
+        className={cn(
+          "sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-200",
+          "md:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+        )}
+      >
+        {navContent}
+      </aside>
+    </>
   );
 }

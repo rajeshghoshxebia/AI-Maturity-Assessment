@@ -19,13 +19,13 @@ export function Topbar({ title }: TopbarProps) {
     : "?";
 
   return (
-    <header className="topbar">
+    <header className="topbar pl-14 md:pl-6">
       {title && (
-        <h1 className="text-base font-semibold text-grey-900 flex-1">{title}</h1>
+        <h1 className="text-base font-semibold text-grey-900 flex-1 truncate">{title}</h1>
       )}
       {!title && <div className="flex-1" />}
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 shrink-0">
         <button
           aria-label="Notifications"
           className="text-grey-500 hover:text-grey-900 transition-colors"
