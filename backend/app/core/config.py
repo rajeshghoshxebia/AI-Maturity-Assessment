@@ -30,3 +30,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+print("Allowed Origins:", settings.cors_origins)
