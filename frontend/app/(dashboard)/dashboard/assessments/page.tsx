@@ -41,40 +41,36 @@ export default function AssessmentsPage() {
   }, []);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-grey-900">Assessments</h2>
+    <div className="space-y-4 animate-fade-in">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-xl md:text-2xl font-semibold text-grey-900">Assessments</h2>
           <p className="text-grey-500 text-sm mt-1">All AI maturity assessments</p>
         </div>
         <Link
           href="/dashboard/assessments/new"
-          className="inline-flex items-center gap-2 rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors"
+          className="shrink-0 inline-flex items-center gap-2 rounded-md bg-velvet px-3 py-2 md:px-4 text-sm font-medium text-white hover:bg-velvet-dark transition-colors"
         >
-          <Plus className="h-4 w-4" /> New Assessment
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">New Assessment</span>
+          <span className="sm:hidden">New</span>
         </Link>
       </div>
 
       {loading && (
-        <div className="card flex items-center justify-center h-40 text-grey-400">
-          Loading…
-        </div>
+        <div className="card flex items-center justify-center h-40 text-grey-400">Loading…</div>
       )}
 
       {error && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
       {!loading && !error && items.length === 0 && (
         <div className="card flex flex-col items-center justify-center h-48 gap-3 text-grey-400">
           <ClipboardList className="h-10 w-10 text-grey-300" />
           <p className="text-sm">No assessments yet.</p>
-          <Link
-            href="/dashboard/assessments/new"
-            className="text-sm text-velvet font-medium hover:underline"
-          >
+          <Link href="/dashboard/assessments/new" className="text-sm text-velvet font-medium hover:underline">
             Create your first assessment →
           </Link>
         </div>
@@ -82,7 +78,8 @@ export default function AssessmentsPage() {
 
       {!loading && items.length > 0 && (
         <div className="card p-0 overflow-hidden">
-          <table className="w-full text-sm">
+          {/* Desktop table — hidden on mobile */}
+          <table className="hidden md:table w-full text-sm">
             <thead className="bg-grey-50 border-b border-grey-200">
               <tr>
                 <th className="text-left px-6 py-3 font-medium text-grey-600">Organisation</th>
@@ -117,6 +114,30 @@ export default function AssessmentsPage() {
               ))}
             </tbody>
           </table>
+
+          {/* Mobile card list — hidden on desktop */}
+          <div className="md:hidden divide-y divide-grey-100">
+            {items.map((a) => (
+              <Link
+                key={a.id}
+                href={`/dashboard/assessments/${a.id}`}
+                className="flex items-center justify-between px-4 py-3.5 hover:bg-grey-50 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-grey-900 truncate">{a.organization_name}</p>
+                  <p className="text-xs text-grey-500 mt-0.5 capitalize">
+                    {a.mode.toLowerCase()} · {new Date(a.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 ml-3 shrink-0">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLE[a.status]}`}>
+                    {STATUS_LABEL[a.status]}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-grey-400" />
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

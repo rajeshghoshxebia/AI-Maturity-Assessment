@@ -296,7 +296,7 @@ export default function AssessmentDetailPage() {
             <div key={dim.id} className="card p-0 overflow-hidden">
               <button
                 onClick={() => setActiveDim(open ? null : dim.id)}
-                className="w-full flex items-center justify-between px-6 py-4 hover:bg-grey-50 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3.5 md:px-6 md:py-4 hover:bg-grey-50 transition-colors"
               >
                 <div className="flex items-center gap-3 text-left">
                   {dimAnswered === dim.questions.length && dim.questions.length > 0 ? (
@@ -321,7 +321,7 @@ export default function AssessmentDetailPage() {
                     const currentObs = pend?.observations ?? saved?.observations ?? "";
 
                     return (
-                      <div key={q.id} className="px-6 py-5">
+                      <div key={q.id} className="px-4 py-4 md:px-6 md:py-5">
                         <div className="flex items-start gap-3 mb-3">
                           <span className="text-xs font-mono text-grey-400 mt-0.5 shrink-0">Q{qi + 1}</span>
                           <p className="text-sm text-grey-800 font-medium">{q.text}</p>
@@ -362,7 +362,7 @@ export default function AssessmentDetailPage() {
 
                         {/* Observations */}
                         {currentScore > 0 && (
-                          <div className="ml-6">
+                          <div>
                             <textarea
                               rows={2}
                               value={currentObs}
@@ -384,11 +384,11 @@ export default function AssessmentDetailPage() {
 
       {/* Sticky save */}
       {Object.keys(pending).length > 0 && (
-        <div className="fixed bottom-6 right-6">
+        <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto">
           <button
             onClick={saveResponses}
             disabled={saving}
-            className="rounded-full bg-velvet px-6 py-3 text-sm font-semibold text-white shadow-elevated hover:bg-velvet-dark transition-colors disabled:opacity-50"
+            className="w-full md:w-auto rounded-full bg-velvet px-6 py-3 text-sm font-semibold text-white shadow-elevated hover:bg-velvet-dark transition-colors disabled:opacity-50"
           >
             {saving ? "Saving…" : `Save ${Object.keys(pending).length} unsaved response${Object.keys(pending).length > 1 ? "s" : ""}`}
           </button>

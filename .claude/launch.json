@@ -17,5 +17,12 @@
       "port": 8000,
       "autoPort": false
     }
+  ,
+    {
+      "name": "aura-divine-v2",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "C:\\personal\\AuraDivineV2\\frontend", "-p", "4200", "--no-clipboard"],
+      "port": 4200
+    }
   ]
 }
