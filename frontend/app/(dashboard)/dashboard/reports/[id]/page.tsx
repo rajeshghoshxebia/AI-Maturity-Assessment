@@ -94,7 +94,8 @@ export default function ReportPage() {
       // Slide 2: Dimension scores table
       const slide2 = prs.addSlide();
       slide2.addText("Dimension Scores", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
-      const rows: PptxGenJS.TableRow[] = [
+      const rows: any[] = [
+      const rows: any[] = [
         [
           { text: "Dimension", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
           { text: "Score", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
