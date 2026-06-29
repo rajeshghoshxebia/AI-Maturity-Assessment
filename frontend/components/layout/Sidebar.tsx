@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   BookOpen,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Home,
   LogOut,
@@ -16,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth";
 import { useState, useEffect } from "react";
+import { useSidebar } from "./sidebar-context";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -27,108 +29,130 @@ const nav = [
 
 export function Sidebar() {
   const path = usePathname();
-  const [open, setOpen] = useState(false);
+  const { collapsed, toggle } = useSidebar();
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Close sidebar on route change (mobile nav)
-  useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => { setMobileOpen(false); }, [path]);
 
-  // Prevent body scroll when sidebar open on mobile
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [open]);
-
-  const navContent = (
-    <>
-      {/* Logo */}
-      <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
-        <div>
-          <span className="text-white font-semibold text-lg tracking-tight">Xebia</span>
-          <p className="text-white/50 text-xs mt-0.5">AI Maturity Platform</p>
-        </div>
-        <button
-          className="md:hidden text-white/60 hover:text-white"
-          onClick={() => setOpen(false)}
-          aria-label="Close menu"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {nav.map(({ href, label, icon: Icon, disabled }) => {
-          const active = path === href || path.startsWith(href + "/");
-          if (disabled) {
-            return (
-              <span
-                key={href}
-                className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-white/30 cursor-not-allowed"
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </span>
-            );
-          }
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-colors",
-                active
-                  ? "bg-velvet text-white"
-                  : "text-white/60 hover:bg-white/10 hover:text-white",
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Sign out */}
-      <div className="px-3 pb-4 border-t border-white/10 pt-4">
-        <button
-          onClick={() => signOut()}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors"
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          Sign out
-        </button>
-      </div>
-    </>
-  );
+  }, [mobileOpen]);
 
   return (
     <>
-      {/* Mobile hamburger button */}
+      {/* Mobile hamburger */}
       <button
         className="md:hidden fixed top-4 left-4 z-50 rounded-md p-2 bg-blue-dark text-white shadow-md"
-        onClick={() => setOpen(true)}
+        onClick={() => setMobileOpen(true)}
         aria-label="Open menu"
       >
         <Menu className="h-5 w-5" />
       </button>
 
-      {/* Mobile overlay */}
-      {open && (
+      {/* Mobile backdrop */}
+      {mobileOpen && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-black/50"
-          onClick={() => setOpen(false)}
+          onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar — fixed on desktop, slide-in drawer on mobile */}
+      {/* Sidebar */}
       <aside
         className={cn(
-          "sidebar fixed inset-y-0 left-0 z-50 flex flex-col transition-transform duration-200",
-          "md:translate-x-0",
-          open ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex flex-col bg-blue-dark transition-all duration-200",
+          // Mobile: slide in/out
+          mobileOpen ? "translate-x-0 w-sidebar" : "-translate-x-full md:translate-x-0",
+          // Desktop: full or collapsed width
+          collapsed ? "md:w-16" : "md:w-sidebar",
         )}
       >
-        {navContent}
+        {/* Logo */}
+        <div className={cn(
+          "flex items-center border-b border-white/10 transition-all duration-200",
+          collapsed ? "md:justify-center px-0 py-5" : "px-6 py-5 justify-between",
+        )}>
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <span className="text-white font-semibold text-lg tracking-tight">Xebia</span>
+              <p className="text-white/50 text-xs mt-0.5">AI Maturity Platform</p>
+            </div>
+          )}
+
+          {/* Desktop collapse toggle */}
+          <button
+            onClick={toggle}
+            className="hidden md:flex items-center justify-center h-7 w-7 rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors shrink-0"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
+
+          {/* Mobile close */}
+          <button
+            className="md:hidden text-white/60 hover:text-white ml-2"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
+          {nav.map(({ href, label, icon: Icon, disabled }) => {
+            const active = path === href || path.startsWith(href + "/");
+            const baseClass = cn(
+              "flex items-center rounded-md py-2.5 text-sm transition-colors",
+              collapsed ? "md:justify-center px-0 w-full" : "gap-3 px-3",
+              disabled
+                ? "text-white/30 cursor-not-allowed"
+                : active
+                  ? "bg-velvet text-white"
+                  : "text-white/60 hover:bg-white/10 hover:text-white",
+            );
+
+            const content = (
+              <>
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && <span className="md:block">{label}</span>}
+                {collapsed && (
+                  <span className="md:hidden">{label}</span>
+                )}
+              </>
+            );
+
+            if (disabled) return <span key={href} className={baseClass} title={label}>{content}</span>;
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={baseClass}
+                title={collapsed ? label : undefined}
+              >
+                {content}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Sign out */}
+        <div className="px-2 pb-4 border-t border-white/10 pt-4">
+          <button
+            onClick={() => signOut()}
+            className={cn(
+              "flex w-full items-center rounded-md py-2.5 text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors",
+              collapsed ? "md:justify-center px-0" : "gap-3 px-3",
+            )}
+            title={collapsed ? "Sign out" : undefined}
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed && <span className="md:block">Sign out</span>}
+            {collapsed && <span className="md:hidden">Sign out</span>}
+          </button>
+        </div>
       </aside>
     </>
   );
