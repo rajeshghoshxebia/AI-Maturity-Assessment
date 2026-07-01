@@ -11,6 +11,8 @@ class AssessmentCreate(BaseModel):
     mode: AssessmentMode = AssessmentMode.CONSULTANT
     notes: str | None = None
     active_subcategory_codes: list[str] = Field(default_factory=list)
+    org_id: UUID | None = None
+    org_unit_id: UUID | None = None
 
 
 class AssessmentUpdate(BaseModel):
@@ -38,6 +40,8 @@ class AssessmentOut(BaseModel):
     created_at: datetime
     completed_at: datetime | None
     active_subcategories: list[SubcategoryRefOut] = []
+    org_id: UUID | None = None
+    org_unit_id: UUID | None = None
 
     model_config = {"from_attributes": True}
 

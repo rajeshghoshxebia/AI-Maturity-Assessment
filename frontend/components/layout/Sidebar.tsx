@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Building2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -21,6 +22,7 @@ import { useSidebar } from "./sidebar-context";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardList },
   { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen },
   { href: "/dashboard/users", label: "Users", icon: Users, disabled: true },
