@@ -43,6 +43,7 @@ def _to_out(assessment: Assessment) -> AssessmentOut:
         active_subcategories=subs,
         org_id=assessment.org_id,
         org_unit_id=assessment.org_unit_id,
+        per_team=assessment.per_team,
     )
 
 
@@ -80,6 +81,7 @@ async def create_assessment(
         notes=body.notes,
         org_id=body.org_id,
         org_unit_id=body.org_unit_id,
+        per_team=body.per_team,
     )
     await repo.add(assessment)
     await db.flush()

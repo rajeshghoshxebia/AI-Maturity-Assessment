@@ -45,6 +45,7 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
     org_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("org_units.id", ondelete="SET NULL"), nullable=True
     )
+    per_team: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     organization_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mode: Mapped[AssessmentMode] = mapped_column(Enum(AssessmentMode), nullable=False, default=AssessmentMode.CONSULTANT)
     status: Mapped[AssessmentStatus] = mapped_column(Enum(AssessmentStatus), nullable=False, default=AssessmentStatus.DRAFT)

@@ -57,6 +57,9 @@ export interface Assessment {
   created_at: string;
   updated_at: string;
   active_subcategories: TechSubcategory[];
+  org_id: string | null;
+  org_unit_id: string | null;
+  per_team: boolean;
 }
 
 export interface AssessmentCreate {
@@ -64,6 +67,9 @@ export interface AssessmentCreate {
   mode: AssessmentMode;
   notes?: string;
   active_subcategory_codes?: string[];
+  org_id?: string;
+  org_unit_id?: string;
+  per_team?: boolean;
 }
 
 export interface AssessmentUpdate {
@@ -79,6 +85,7 @@ export interface ResponseUpsert {
   question_id: string;
   score: number;
   observations?: string;
+  org_unit_id?: string;
 }
 
 export interface ResponseOut {
@@ -87,6 +94,7 @@ export interface ResponseOut {
   score: number;
   observations: string | null;
   answered_at: string;
+  org_unit_id: string | null;
 }
 
 // ── Scoring ──────────────────────────────────────────────────────────────────
@@ -103,4 +111,23 @@ export interface ScoreOut {
   overall_score: number;
   maturity_label: string;
   dimensions: DimensionScoreOut[];
+}
+
+export interface UnitScoreOut {
+  unit_id: string;
+  unit_name: string;
+  unit_type: string;
+  overall_score: number;
+  maturity_label: string;
+  dimensions: DimensionScoreOut[];
+  children: UnitScoreOut[];
+}
+
+export interface HierarchyScoreOut {
+  org_name: string;
+  org_industry: string | null;
+  overall_score: number;
+  maturity_label: string;
+  dimensions: DimensionScoreOut[];
+  units: UnitScoreOut[];
 }

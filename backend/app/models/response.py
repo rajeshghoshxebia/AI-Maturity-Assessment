@@ -31,6 +31,9 @@ class Response(UUIDMixin, Base):
     invitation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("survey_invitations.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    org_unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("org_units.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     score: Mapped[int] = mapped_column(SmallInteger, nullable=False)  # 1-5
     observations: Mapped[str | None] = mapped_column(Text, nullable=True)
     answered_at: Mapped[datetime] = mapped_column(

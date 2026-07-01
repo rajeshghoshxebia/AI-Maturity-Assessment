@@ -13,6 +13,7 @@ class AssessmentCreate(BaseModel):
     active_subcategory_codes: list[str] = Field(default_factory=list)
     org_id: UUID | None = None
     org_unit_id: UUID | None = None
+    per_team: bool = False
 
 
 class AssessmentUpdate(BaseModel):
@@ -42,6 +43,7 @@ class AssessmentOut(BaseModel):
     active_subcategories: list[SubcategoryRefOut] = []
     org_id: UUID | None = None
     org_unit_id: UUID | None = None
+    per_team: bool = False
 
     model_config = {"from_attributes": True}
 
