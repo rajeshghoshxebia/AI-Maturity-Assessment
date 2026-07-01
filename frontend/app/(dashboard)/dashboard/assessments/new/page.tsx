@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -15,6 +15,14 @@ const SUBCATEGORIES = [
 ];
 
 export default function NewAssessmentPage() {
+  return (
+    <Suspense>
+      <NewAssessmentForm />
+    </Suspense>
+  );
+}
+
+function NewAssessmentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const prefillOrgId = searchParams.get("org_id");
@@ -210,6 +218,8 @@ export default function NewAssessmentPage() {
     </div>
   );
 }
+
+// ── helpers ──────────────────────────────────────────────────────────────────
 
 function flatUnits(units: Organization["units"]): Organization["units"] {
   return units.flatMap((u) => [u, ...flatUnits(u.children)]);
