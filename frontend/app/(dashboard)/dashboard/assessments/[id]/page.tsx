@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Circle, ChevronDown, ChevronUp, BarChart2, Mail, Trash2, Copy, Check } from "lucide-react";
+import {
+  ArrowLeft, BarChart2, Check, CheckCircle2, ChevronDown, ChevronUp,
+  Circle, Copy, Mail, Trash2, Users,
+} from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
 import type { Assessment, Dimension, ResponseOut, ScoreOut, ResponseUpsert } from "@/types/assessment";
+import type { Organization, OrgUnit } from "@/types/organization";
 
 interface Invitation {
   id: string;
@@ -86,7 +90,6 @@ function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName:
       >
         {sending ? "Sending…" : "Send Survey Links"}
       </button>
-
       {invitations.filter((i) => i.status !== "REVOKED").length > 0 && (
         <div className="border-t border-grey-100 pt-4 space-y-2">
           <p className="text-xs font-medium text-grey-600 uppercase tracking-wide">Invitations sent</p>
@@ -118,18 +121,26 @@ function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName:
   );
 }
 
+function flatUnits(units: OrgUnit[]): OrgUnit[] {
+  return units.flatMap((u) => [u, ...flatUnits(u.children)]);
+}
+
 export default function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
-  const [responses, setResponses] = useState<Record<string, ResponseOut>>({});
+  const [allResponses, setAllResponses] = useState<ResponseOut[]>([]);
   const [score, setScore] = useState<ScoreOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeDim, setActiveDim] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, { score: number; observations: string }>>({});
+
+  // Per-team state
+  const [org, setOrg] = useState<Organization | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -142,23 +153,36 @@ export default function AssessmentDetailPage() {
       const activeCodes = new Set(a.active_subcategories.map((s) => s.code));
       const filtered = dims.map((d) => {
         if (d.code === "TECHNOLOGY_STACK") {
-          return {
-            ...d,
-            questions: d.questions.filter((q) => q.subcategory_id && activeCodes.has(
-              d.subcategories.find((s) => s.id === q.subcategory_id)?.code ?? ""
-            )),
-          };
+          return { ...d, questions: d.questions.filter((q) => q.subcategory_id && activeCodes.has(d.subcategories.find((s) => s.id === q.subcategory_id)?.code ?? "")) };
         }
         return d;
       }).filter((d) => d.code !== "TECHNOLOGY_STACK" || d.questions.length > 0);
       setDimensions(filtered);
-      const rMap: Record<string, ResponseOut> = {};
-      for (const r of resps) rMap[r.question_id] = r;
-      setResponses(rMap);
+      setAllResponses(resps);
       if (filtered.length > 0) setActiveDim(filtered[0].id);
       if (existingScore) setScore(existingScore);
+
+      // Load org if per_team
+      if (a.per_team && a.org_id) {
+        api.get<Organization>(`/organizations/${a.org_id}`).then((o) => {
+          setOrg(o);
+          const units = flatUnits(o.units);
+          if (units.length > 0) setSelectedUnitId(units[0].id);
+        }).catch(() => {});
+      }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
+
+  // Derive responses for selected team
+  const responses: Record<string, ResponseOut> = {};
+  for (const r of allResponses) {
+    const key = assessment?.per_team ? `${r.org_unit_id ?? ""}:${r.question_id}` : r.question_id;
+    if (assessment?.per_team) {
+      if (r.org_unit_id === selectedUnitId) responses[r.question_id] = r;
+    } else {
+      responses[r.question_id] = r;
+    }
+  }
 
   async function loadScore() {
     try {
@@ -175,11 +199,16 @@ export default function AssessmentDetailPage() {
         question_id: qid,
         score: v.score,
         observations: v.observations || undefined,
+        org_unit_id: assessment?.per_team ? selectedUnitId ?? undefined : undefined,
       }));
       const saved = await api.put<ResponseOut[]>(`/assessments/${id}/responses`, { responses: payload });
-      const rMap = { ...responses };
-      for (const r of saved) rMap[r.question_id] = r;
-      setResponses(rMap);
+      setAllResponses((prev) => {
+        const next = prev.filter((r) => {
+          if (!assessment?.per_team) return !saved.find((s) => s.question_id === r.question_id);
+          return !(r.org_unit_id === selectedUnitId && saved.find((s) => s.question_id === r.question_id));
+        });
+        return [...next, ...saved];
+      });
       setPending({});
       await loadScore();
     } finally {
@@ -187,8 +216,8 @@ export default function AssessmentDetailPage() {
     }
   }
 
-  function setQuestionScore(qid: string, score: number) {
-    setPending((p) => ({ ...p, [qid]: { score, observations: p[qid]?.observations ?? responses[qid]?.observations ?? "" } }));
+  function setQuestionScore(qid: string, s: number) {
+    setPending((p) => ({ ...p, [qid]: { score: s, observations: p[qid]?.observations ?? responses[qid]?.observations ?? "" } }));
   }
 
   function setObservation(qid: string, obs: string) {
@@ -200,12 +229,10 @@ export default function AssessmentDetailPage() {
   const answeredCount = Object.keys(responses).length + Object.keys(pending).filter((k) => !responses[k]).length;
   const totalQuestions = dimensions.reduce((sum, d) => sum + d.questions.length, 0);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64 text-grey-400">Loading assessment…</div>;
-  }
-  if (!assessment) {
-    return <div className="text-grey-500">Assessment not found.</div>;
-  }
+  if (loading) return <div className="flex items-center justify-center h-64 text-grey-400">Loading assessment…</div>;
+  if (!assessment) return <div className="text-grey-500">Assessment not found.</div>;
+
+  const allTeams = org ? flatUnits(org.units) : [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -216,13 +243,14 @@ export default function AssessmentDetailPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h2 className="text-2xl font-semibold text-grey-900">{assessment.organization_name}</h2>
+            <h2 className="text-xl font-semibold text-grey-900 md:text-2xl truncate">{assessment.organization_name}</h2>
             <p className="text-grey-500 text-sm mt-0.5">
               {assessment.mode.toLowerCase()} mode · {assessment.status.toLowerCase().replace("_", " ")}
+              {assessment.per_team && <span className="ml-2 inline-flex items-center gap-1 text-velvet"><Users className="h-3.5 w-3.5" />per-team</span>}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <Link
             href={`/dashboard/reports/${id}`}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
@@ -230,38 +258,61 @@ export default function AssessmentDetailPage() {
             <BarChart2 className="h-4 w-4" /> Report
           </Link>
           {Object.keys(pending).length > 0 && (
-            <button
-              onClick={saveResponses}
-              disabled={saving}
-              className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50"
-            >
+            <button onClick={saveResponses} disabled={saving} className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50">
               {saving ? "Saving…" : `Save ${Object.keys(pending).length} response${Object.keys(pending).length > 1 ? "s" : ""}`}
             </button>
           )}
         </div>
       </div>
 
+      {/* Per-team tabs */}
+      {assessment.per_team && allTeams.length > 0 && (
+        <div className="card p-0 overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-grey-100 bg-grey-50">
+            <Users className="h-4 w-4 text-velvet shrink-0" />
+            <p className="text-xs font-medium text-grey-600 uppercase tracking-wide">Scoring team</p>
+          </div>
+          <div className="flex gap-1 p-2 flex-wrap">
+            {allTeams.map((u) => {
+              const teamResponses = allResponses.filter((r) => r.org_unit_id === u.id);
+              const answered = teamResponses.length;
+              const isSelected = selectedUnitId === u.id;
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => { setSelectedUnitId(u.id); setPending({}); }}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isSelected ? "bg-velvet text-white" : "text-grey-600 hover:bg-grey-100"
+                  }`}
+                >
+                  {u.name}
+                  {answered > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.5 text-xs ${isSelected ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
+                      {answered}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Progress + score */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-xs text-grey-500 uppercase tracking-wide">Progress</p>
+          <p className="text-xs text-grey-500 uppercase tracking-wide">Progress{assessment.per_team && selectedUnitId ? ` · ${allTeams.find((u) => u.id === selectedUnitId)?.name}` : ""}</p>
           <p className="text-2xl font-semibold text-grey-900 mt-1">{answeredCount} / {totalQuestions}</p>
           <div className="mt-2 h-1.5 rounded-full bg-grey-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-velvet transition-all"
-              style={{ width: totalQuestions ? `${(answeredCount / totalQuestions) * 100}%` : "0%" }}
-            />
+            <div className="h-full rounded-full bg-velvet transition-all" style={{ width: totalQuestions ? `${(answeredCount / totalQuestions) * 100}%` : "0%" }} />
           </div>
         </div>
-
         {score ? (
           <>
             <div className="card">
               <p className="text-xs text-grey-500 uppercase tracking-wide">Overall Score</p>
               <p className="text-2xl font-semibold text-grey-900 mt-1">{formatScore(score.overall_score)} / 5.0</p>
-              <span className={`maturity-badge mt-1 ${maturityBadgeClass(score.maturity_label)}`}>
-                {score.maturity_label}
-              </span>
+              <span className={`maturity-badge mt-1 ${maturityBadgeClass(score.maturity_label)}`}>{score.maturity_label}</span>
             </div>
             <div className="card overflow-auto">
               <p className="text-xs text-grey-500 uppercase tracking-wide mb-2">By Dimension</p>
@@ -276,13 +327,10 @@ export default function AssessmentDetailPage() {
             </div>
           </>
         ) : (
-          <div className="card sm:col-span-2 flex items-center justify-center text-grey-400 text-sm">
-            Score will appear once you save responses
-          </div>
+          <div className="card sm:col-span-2 flex items-center justify-center text-grey-400 text-sm">Score will appear once you save responses</div>
         )}
       </div>
 
-      {/* Survey invite panel — only for SURVEY mode */}
       {assessment.mode === "SURVEY" && (
         <InvitePanel assessmentId={id} orgName={assessment.organization_name} />
       )}
@@ -326,9 +374,7 @@ export default function AssessmentDetailPage() {
                           <span className="text-xs font-mono text-grey-400 mt-0.5 shrink-0">Q{qi + 1}</span>
                           <p className="text-sm text-grey-800 font-medium">{q.text}</p>
                         </div>
-
-                        {/* Score buttons 1–5 */}
-                        <div className="flex gap-2 mb-3 ml-6">
+                        <div className="flex gap-2 mb-3 ml-6 flex-wrap">
                           {[1, 2, 3, 4, 5].map((lvl) => {
                             const level = q.levels?.find((l) => l.level === lvl);
                             const selected = currentScore === lvl;
@@ -338,9 +384,7 @@ export default function AssessmentDetailPage() {
                                 onClick={() => setQuestionScore(q.id, lvl)}
                                 title={level?.description}
                                 className={`group relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all ${
-                                  selected
-                                    ? "border-velvet bg-velvet text-white"
-                                    : "border-grey-200 text-grey-500 hover:border-velvet hover:text-velvet"
+                                  selected ? "border-velvet bg-velvet text-white" : "border-grey-200 text-grey-500 hover:border-velvet hover:text-velvet"
                                 }`}
                               >
                                 {lvl}
@@ -359,18 +403,14 @@ export default function AssessmentDetailPage() {
                             </span>
                           )}
                         </div>
-
-                        {/* Observations */}
                         {currentScore > 0 && (
-                          <div>
-                            <textarea
-                              rows={2}
-                              value={currentObs}
-                              onChange={(e) => setObservation(q.id, e.target.value)}
-                              placeholder="Observations / evidence (optional)"
-                              className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400"
-                            />
-                          </div>
+                          <textarea
+                            rows={2}
+                            value={currentObs}
+                            onChange={(e) => setObservation(q.id, e.target.value)}
+                            placeholder="Observations / evidence (optional)"
+                            className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400"
+                          />
                         )}
                       </div>
                     );
@@ -382,7 +422,6 @@ export default function AssessmentDetailPage() {
         })}
       </div>
 
-      {/* Sticky save */}
       {Object.keys(pending).length > 0 && (
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto">
           <button

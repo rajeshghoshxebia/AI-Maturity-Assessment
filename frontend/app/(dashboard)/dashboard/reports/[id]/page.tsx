@@ -7,10 +7,10 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { ArrowLeft, Download, FileText, Presentation } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, FileText, MessageSquare, Presentation, Users } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
-import type { Assessment, ScoreOut } from "@/types/assessment";
+import type { Assessment, ScoreOut, HierarchyScoreOut, UnitScoreOut } from "@/types/assessment";
 
 const VELVET = "#831B84";
 const MATURITY_COLORS: Record<string, string> = {
@@ -31,8 +31,62 @@ const DIM_NARRATIVE: Record<string, string> = {
   VALUE_ROI: "Tracks how AI investments are measured, the maturity of business cases, and the realisation of quantifiable outcomes.",
 };
 
+const UNIT_TYPE_LABEL: Record<string, string> = {
+  DIVISION: "Division",
+  DEPARTMENT: "Department",
+  TEAM: "Team",
+  BUSINESS_UNIT: "Business Unit",
+  REGION: "Region",
+};
+
 function maturityColor(label: string) {
   return MATURITY_COLORS[label] ?? VELVET;
+}
+
+// ── Hierarchy tree node ───────────────────────────────────────────────────────
+
+function UnitTreeNode({ unit, depth = 0 }: { unit: UnitScoreOut; depth?: number }) {
+  const [expanded, setExpanded] = useState(depth < 2);
+  const hasChildren = unit.children.length > 0;
+
+  return (
+    <div>
+      <div
+        className={`flex items-center gap-2 rounded-md px-3 py-2 hover:bg-grey-50 transition-colors cursor-pointer ${depth === 0 ? "bg-grey-50" : ""}`}
+        style={{ paddingLeft: `${12 + depth * 20}px` }}
+        onClick={() => hasChildren && setExpanded((v) => !v)}
+      >
+        <span className="shrink-0 w-4">
+          {hasChildren ? (
+            expanded ? <ChevronDown className="h-3.5 w-3.5 text-grey-400" /> : <ChevronRight className="h-3.5 w-3.5 text-grey-400" />
+          ) : <span className="h-3.5 w-3.5 block" />}
+        </span>
+        <span className="flex-1 text-sm font-medium text-grey-800 truncate">{unit.unit_name}</span>
+        <span className="text-xs text-grey-400 hidden sm:inline">{UNIT_TYPE_LABEL[unit.unit_type] ?? unit.unit_type}</span>
+        {unit.overall_score > 0 ? (
+          <>
+            <span className="text-sm font-bold text-grey-900 w-10 text-right">{formatScore(unit.overall_score)}</span>
+            <span className={`maturity-badge text-xs w-28 text-center ${maturityBadgeClass(unit.maturity_label)}`}>{unit.maturity_label}</span>
+          </>
+        ) : (
+          <span className="text-xs text-grey-400 italic w-40 text-right">No responses</span>
+        )}
+      </div>
+      {expanded && hasChildren && (
+        <div>
+          {unit.children.map((child) => (
+            <UnitTreeNode key={child.unit_id} unit={child} depth={depth + 1} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Team comparison bar chart ─────────────────────────────────────────────────
+
+function flatUnits(units: UnitScoreOut[]): UnitScoreOut[] {
+  return units.flatMap((u) => [u, ...flatUnits(u.children)]);
 }
 
 export default function ReportPage() {
@@ -41,6 +95,7 @@ export default function ReportPage() {
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [score, setScore] = useState<ScoreOut | null>(null);
+  const [hierarchy, setHierarchy] = useState<HierarchyScoreOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -49,7 +104,14 @@ export default function ReportPage() {
       api.get<Assessment>(`/assessments/${id}`),
       api.get<ScoreOut>(`/assessments/${id}/responses/score`),
     ])
-      .then(([a, s]) => { setAssessment(a); setScore(s); })
+      .then(([a, s]) => {
+        setAssessment(a);
+        setScore(s);
+        // Load hierarchy if per_team and org_id exists
+        if (a.per_team && a.org_id) {
+          return api.get<HierarchyScoreOut>(`/assessments/${id}/responses/score/hierarchy`).then(setHierarchy).catch(() => {});
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
@@ -82,7 +144,7 @@ export default function ReportPage() {
       // Slide 1: Title
       const slide1 = prs.addSlide();
       slide1.background = { color: "150027" };
-      slide1.addText(`AI Maturity Assessment`, { x: 0.5, y: 1.2, w: 12, h: 0.8, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
+      slide1.addText("AI Maturity Assessment", { x: 0.5, y: 1.2, w: 12, h: 0.8, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
       slide1.addText(assessment.organization_name, { x: 0.5, y: 2.2, w: 12, h: 0.6, fontSize: 22, color: "E0C8E0", fontFace: "Arial" });
       slide1.addText(`Overall Score: ${formatScore(score.overall_score)} / 5.0  ·  ${score.maturity_label}`, {
         x: 0.5, y: 3.0, w: 12, h: 0.5, fontSize: 16, color: "C9A0CA", fontFace: "Arial",
@@ -91,9 +153,17 @@ export default function ReportPage() {
         x: 0.5, y: 6.5, w: 12, h: 0.4, fontSize: 11, color: "888888", fontFace: "Arial",
       });
 
-      // Slide 2: Dimension scores table
-      const slide2 = prs.addSlide();
-      slide2.addText("Dimension Scores", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+      // Slide 2: Consultant notes (if present)
+      if (assessment.notes?.trim()) {
+        const slide2 = prs.addSlide();
+        slide2.addText("Consultant Notes", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+        slide2.addShape("rect", { x: 0.5, y: 1.0, w: 12.5, h: 0.05, fill: { color: "831B84" } });
+        slide2.addText(assessment.notes, { x: 0.5, y: 1.3, w: 12.5, h: 5.5, fontSize: 13, color: "374151", fontFace: "Arial", valign: "top", wrap: true });
+      }
+
+      // Slide 3: Dimension scores table
+      const slide3 = prs.addSlide();
+      slide3.addText("Dimension Scores", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
       const rows: any[] = [
         [
           { text: "Dimension", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
@@ -108,22 +178,46 @@ export default function ReportPage() {
           { text: DIM_NARRATIVE[d.code] ?? "" },
         ]),
       ];
-      slide2.addTable(rows, { x: 0.5, y: 1.0, w: 12.5, colW: [2.8, 0.8, 1.8, 7.1], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
+      slide3.addTable(rows, { x: 0.5, y: 1.0, w: 12.5, colW: [2.8, 0.8, 1.8, 7.1], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
 
-      // Slide 3: Key observations
-      const slide3 = prs.addSlide();
-      slide3.addText("Strengths & Areas for Improvement", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+      // Slide 4: Strengths & focus areas
+      const slide4 = prs.addSlide();
+      slide4.addText("Strengths & Areas for Improvement", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
       const sorted = [...score.dimensions].sort((a, b) => b.score - a.score);
       const top3 = sorted.slice(0, 3);
       const bottom3 = sorted.slice(-3).reverse();
-      slide3.addText("Top performing dimensions", { x: 0.5, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "059669", fontFace: "Arial" });
+      slide4.addText("Top performing dimensions", { x: 0.5, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "059669", fontFace: "Arial" });
       top3.forEach((d, i) => {
-        slide3.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 0.7, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
+        slide4.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 0.7, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
       });
-      slide3.addText("Focus areas for improvement", { x: 7, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "DC2626", fontFace: "Arial" });
+      slide4.addText("Focus areas for improvement", { x: 7, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "DC2626", fontFace: "Arial" });
       bottom3.forEach((d, i) => {
-        slide3.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 7.2, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
+        slide4.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 7.2, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
       });
+
+      // Slide 5: Hierarchy / team breakdown (if available)
+      if (hierarchy) {
+        const allTeams = flatUnits(hierarchy.units).filter((u) => u.overall_score > 0);
+        if (allTeams.length > 0) {
+          const slide5 = prs.addSlide();
+          slide5.addText("Team Maturity Breakdown", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+          const teamRows: any[] = [
+            [
+              { text: "Team / Unit", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+              { text: "Type", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+              { text: "Score", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+              { text: "Maturity Level", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+            ],
+            ...allTeams.map((u) => [
+              { text: u.unit_name },
+              { text: UNIT_TYPE_LABEL[u.unit_type] ?? u.unit_type },
+              { text: formatScore(u.overall_score), options: { bold: true } },
+              { text: u.maturity_label },
+            ]),
+          ];
+          slide5.addTable(teamRows, { x: 0.5, y: 1.0, w: 12.5, colW: [5, 2, 1.5, 4], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
+        }
+      }
 
       await prs.writeFile({ fileName: `AI-Maturity-Report-${assessment.organization_name}.pptx` });
     } finally {
@@ -137,6 +231,9 @@ export default function ReportPage() {
   const radarData = score.dimensions.map((d) => ({ subject: d.name.replace(/ &| and /g, " &\n"), score: d.score, fullMark: 5 }));
   const barData = score.dimensions.map((d) => ({ name: d.name, score: d.score, label: d.label }));
   const sorted = [...score.dimensions].sort((a, b) => b.score - a.score);
+
+  // Team comparison data
+  const allTeams = hierarchy ? flatUnits(hierarchy.units).filter((u) => u.overall_score > 0) : [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -171,6 +268,7 @@ export default function ReportPage() {
 
       {/* Printable report body */}
       <div ref={reportRef} className="space-y-6 bg-white">
+
         {/* Summary banner */}
         <div className="rounded-xl border border-grey-100 bg-gradient-to-r from-[#150027] to-[#2d005a] p-6 text-white">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -191,6 +289,65 @@ export default function ReportPage() {
             </div>
           </div>
         </div>
+
+        {/* Consultant notes */}
+        {assessment.notes?.trim() && (
+          <div className="rounded-xl border border-velvet/20 bg-velvet/5 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <MessageSquare className="h-4 w-4 text-velvet shrink-0" />
+              <h3 className="font-semibold text-velvet">Consultant Notes</h3>
+            </div>
+            <div className="prose prose-sm max-w-none text-grey-700 whitespace-pre-wrap leading-relaxed">
+              {assessment.notes}
+            </div>
+          </div>
+        )}
+
+        {/* Hierarchy overview (per-team) */}
+        {hierarchy && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="h-4 w-4 text-velvet shrink-0" />
+              <h3 className="font-semibold text-grey-900">Organisation Hierarchy & Team Scores</h3>
+              <span className="ml-auto text-xs text-grey-400">{hierarchy.org_name}{hierarchy.org_industry ? ` · ${hierarchy.org_industry}` : ""}</span>
+            </div>
+            <div className="divide-y divide-grey-100 -mx-4 sm:-mx-6">
+              {hierarchy.units.map((unit) => (
+                <UnitTreeNode key={unit.unit_id} unit={unit} depth={0} />
+              ))}
+            </div>
+            {hierarchy.units.length === 0 && (
+              <p className="text-sm text-grey-400 italic text-center py-4">No teams scored yet.</p>
+            )}
+          </div>
+        )}
+
+        {/* Team comparison bar chart */}
+        {allTeams.length > 1 && (
+          <div className="card">
+            <h3 className="font-semibold text-grey-900 mb-4">Team Comparison</h3>
+            <ResponsiveContainer width="100%" height={Math.max(200, allTeams.length * 40)}>
+              <BarChart
+                data={allTeams.map((u) => ({ name: u.unit_name, score: u.overall_score, label: u.maturity_label }))}
+                layout="vertical"
+                margin={{ top: 0, right: 60, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickCount={6} />
+                <YAxis dataKey="name" type="category" width={160} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                <Tooltip
+                  formatter={(v: number) => [formatScore(v), "Score"]}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+                />
+                <Bar dataKey="score" radius={[0, 4, 4, 0]} maxBarSize={24}>
+                  {allTeams.map((u, i) => (
+                    <Cell key={i} fill={maturityColor(u.maturity_label)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -242,7 +399,6 @@ export default function ReportPage() {
                     <span className={`maturity-badge text-xs ${maturityBadgeClass(d.label)}`}>{d.label}</span>
                   </div>
                 </div>
-                {/* Mini progress bar */}
                 <div className="h-1.5 rounded-full bg-grey-100 overflow-hidden mb-2">
                   <div className="h-full rounded-full transition-all" style={{ width: `${(d.score / 5) * 100}%`, backgroundColor: maturityColor(d.label) }} />
                 </div>

@@ -31,12 +31,15 @@ function NewAssessmentForm() {
   const [error, setError] = useState<string | null>(null);
   const [linkedOrg, setLinkedOrg] = useState<Organization | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string>("");
+  const [perTeam, setPerTeam] = useState(false);
   const [form, setForm] = useState({
     organization_name: "",
     mode: "CONSULTANT" as AssessmentMode,
     notes: "",
     active_subcategory_codes: [] as string[],
   });
+
+  const hasUnits = (linkedOrg?.units?.length ?? 0) > 0;
 
   useEffect(() => {
     if (!prefillOrgId) return;
@@ -66,7 +69,8 @@ function NewAssessmentForm() {
       const assessment = await api.post<{ id: string }>("/assessments", {
         ...form,
         org_id: prefillOrgId ?? undefined,
-        org_unit_id: selectedUnitId || undefined,
+        org_unit_id: (!perTeam && selectedUnitId) ? selectedUnitId : undefined,
+        per_team: perTeam && hasUnits,
       });
       router.push(`/dashboard/assessments/${assessment.id}`);
     } catch {
@@ -105,20 +109,42 @@ function NewAssessmentForm() {
           />
         </div>
 
-        {/* Linked org / team */}
-        {linkedOrg && (
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-grey-700">Team / Unit</label>
-            <select
-              value={selectedUnitId}
-              onChange={(e) => setSelectedUnitId(e.target.value)}
-              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet bg-white"
-            >
-              <option value="">Whole organization</option>
-              {flatUnits(linkedOrg.units).map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
+        {/* Linked org options */}
+        {linkedOrg && hasUnits && (
+          <div className="space-y-3">
+            {/* Per-team toggle */}
+            <div className="flex items-start gap-3 rounded-lg border border-grey-200 px-4 py-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={perTeam}
+                onClick={() => { setPerTeam((v) => !v); setSelectedUnitId(""); }}
+                className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-velvet/40 ${perTeam ? "bg-velvet" : "bg-grey-200"}`}
+              >
+                <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${perTeam ? "translate-x-4" : "translate-x-0"}`} />
+              </button>
+              <div>
+                <p className="text-sm font-medium text-grey-800">Enable per-team assessment</p>
+                <p className="text-xs text-grey-500 mt-0.5">Score each team in the hierarchy independently. Results will show team-level breakdown and hierarchy rollup.</p>
+              </div>
+            </div>
+
+            {/* Single team selector (when per-team is off) */}
+            {!perTeam && (
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-grey-700">Team / Unit</label>
+                <select
+                  value={selectedUnitId}
+                  onChange={(e) => setSelectedUnitId(e.target.value)}
+                  className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet bg-white"
+                >
+                  <option value="">Whole organization</option>
+                  {flatUnits(linkedOrg.units).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
 
