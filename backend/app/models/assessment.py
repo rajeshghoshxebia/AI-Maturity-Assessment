@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from app.models.response import Response, SurveyAssignment
     from app.models.dimension import TechSubcategory
     from app.models.survey import SurveyInvitation
+    from app.models.organization import Organization, OrgUnit
 
 
 class AssessmentMode(str, enum.Enum):
@@ -38,6 +39,12 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
     created_by: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False
     )
+    org_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    org_unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("org_units.id", ondelete="SET NULL"), nullable=True
+    )
     organization_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mode: Mapped[AssessmentMode] = mapped_column(Enum(AssessmentMode), nullable=False, default=AssessmentMode.CONSULTANT)
     status: Mapped[AssessmentStatus] = mapped_column(Enum(AssessmentStatus), nullable=False, default=AssessmentStatus.DRAFT)
@@ -46,6 +53,8 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
 
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="assessments")
     creator: Mapped["User"] = relationship("User")
+    organization: Mapped["Organization | None"] = relationship("Organization", back_populates="assessments")
+    org_unit: Mapped["OrgUnit | None"] = relationship("OrgUnit", back_populates="assessments")
     responses: Mapped[list["Response"]] = relationship("Response", back_populates="assessment")
     survey_assignments: Mapped[list["SurveyAssignment"]] = relationship("SurveyAssignment", back_populates="assessment")
     active_subcategories: Mapped[list["AssessmentSubcategory"]] = relationship(

@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     ACS_CONNECTION_STRING: str = ""
     ACS_SENDER_EMAIL: str = "no-reply@xebia.com"
 
+    # Base URL of the frontend app — used to generate survey links in emails
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # Comma-separated list of allowed frontend origins e.g. https://myapp.vercel.app
     ALLOWED_ORIGINS: str = "http://localhost:3000"
 

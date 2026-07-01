@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response as FastAPIResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -42,12 +42,9 @@ class InvitationOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _survey_url(request: Request, token: UUID) -> str:
-    base = str(request.base_url).rstrip("/")
-    # For the frontend app (port 3000) not the API (port 8000)
-    # Try to infer from origin header or use env var fallback
-    frontend_base = base.replace(":8000", ":3000")
-    return f"{frontend_base}/survey/{token}"
+def _survey_url(token: UUID) -> str:
+    from app.core.config import settings
+    return f"{settings.FRONTEND_URL.rstrip('/')}/survey/{token}"
 
 
 async def _get_assessment(
@@ -68,7 +65,6 @@ async def _get_assessment(
 @router.get("", response_model=list[InvitationOut])
 async def list_invitations(
     assessment_id: UUID,
-    request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[InvitationOut]:
@@ -88,7 +84,7 @@ async def list_invitations(
             sent_at=inv.sent_at,
             completed_at=inv.completed_at,
             created_at=inv.created_at,
-            survey_url=_survey_url(request, inv.token),
+            survey_url=_survey_url(inv.token),
         )
         for inv in invites
     ]
@@ -98,7 +94,6 @@ async def list_invitations(
 async def send_invitations(
     assessment_id: UUID,
     body: InviteBatchIn,
-    request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[InvitationOut]:
@@ -128,7 +123,7 @@ async def send_invitations(
             db.add(inv)
             await db.flush()
 
-        survey_url = _survey_url(request, inv.token)
+        survey_url = _survey_url(inv.token)
         sent = await send_survey_invitation(
             to_email=inv.email,
             to_name=inv.name,

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/lib/api-client";
 import type { AssessmentMode } from "@/types/assessment";
+import type { Organization } from "@/types/organization";
 
 const SUBCATEGORIES = [
   { code: "DATA_STACK", label: "Data Tech Stack", desc: "Data quality, integration, governance" },
@@ -14,15 +15,38 @@ const SUBCATEGORIES = [
 ];
 
 export default function NewAssessmentPage() {
+  return (
+    <Suspense>
+      <NewAssessmentForm />
+    </Suspense>
+  );
+}
+
+function NewAssessmentForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillOrgId = searchParams.get("org_id");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkedOrg, setLinkedOrg] = useState<Organization | null>(null);
+  const [selectedUnitId, setSelectedUnitId] = useState<string>("");
   const [form, setForm] = useState({
     organization_name: "",
     mode: "CONSULTANT" as AssessmentMode,
     notes: "",
     active_subcategory_codes: [] as string[],
   });
+
+  useEffect(() => {
+    if (!prefillOrgId) return;
+    api.get<Organization>(`/organizations/${prefillOrgId}`)
+      .then((org) => {
+        setLinkedOrg(org);
+        setForm((f) => ({ ...f, organization_name: org.name }));
+      })
+      .catch(() => {});
+  }, [prefillOrgId]);
 
   function toggleSub(code: string) {
     setForm((f) => ({
@@ -39,7 +63,11 @@ export default function NewAssessmentPage() {
     setLoading(true);
     setError(null);
     try {
-      const assessment = await api.post<{ id: string }>("/assessments", form);
+      const assessment = await api.post<{ id: string }>("/assessments", {
+        ...form,
+        org_id: prefillOrgId ?? undefined,
+        org_unit_id: selectedUnitId || undefined,
+      });
       router.push(`/dashboard/assessments/${assessment.id}`);
     } catch {
       setError("Failed to create assessment. Please try again.");
@@ -76,6 +104,23 @@ export default function NewAssessmentPage() {
             className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
           />
         </div>
+
+        {/* Linked org / team */}
+        {linkedOrg && (
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Team / Unit</label>
+            <select
+              value={selectedUnitId}
+              onChange={(e) => setSelectedUnitId(e.target.value)}
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet bg-white"
+            >
+              <option value="">Whole organization</option>
+              {flatUnits(linkedOrg.units).map((u) => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Mode */}
         <div className="space-y-1.5">
@@ -172,4 +217,10 @@ export default function NewAssessmentPage() {
       </form>
     </div>
   );
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function flatUnits(units: Organization["units"]): Organization["units"] {
+  return units.flatMap((u) => [u, ...flatUnits(u.children)]);
 }
