@@ -4,6 +4,7 @@ import uuid
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -142,15 +143,16 @@ async def update_organization(
     )
 
 
-@router.delete("/{org_id}", status_code=204)
+@router.delete("/{org_id}", status_code=204, response_class=Response)
 async def delete_organization(
     org_id: UUID,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     org = await _get_org(org_id, user, db)
     await db.delete(org)
     await db.commit()
+    return Response(status_code=204)
 
 
 # ── Org Units ────────────────────────────────────────────────────────────────
@@ -214,13 +216,13 @@ async def update_unit(
     )
 
 
-@router.delete("/{org_id}/units/{unit_id}", status_code=204)
+@router.delete("/{org_id}/units/{unit_id}", status_code=204, response_class=Response)
 async def delete_unit(
     org_id: UUID,
     unit_id: UUID,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> None:
+) -> Response:
     await _get_org(org_id, user, db)
     result = await db.execute(select(OrgUnit).where(OrgUnit.id == unit_id, OrgUnit.org_id == org_id))
     unit = result.scalar_one_or_none()
@@ -228,3 +230,4 @@ async def delete_unit(
         raise HTTPException(status_code=404, detail="Unit not found")
     await db.delete(unit)
     await db.commit()
+    return Response(status_code=204)
