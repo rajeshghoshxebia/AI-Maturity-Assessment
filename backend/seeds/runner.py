@@ -41,6 +41,13 @@ async def _seed_dev_tenant(session: AsyncSession) -> None:
 
 async def seed(session: AsyncSession) -> None:
     await _seed_dev_tenant(session)
+
+    # Skip if dimensions already seeded
+    existing_dims = await session.execute(select(Dimension).limit(1))
+    if existing_dims.scalars().first():
+        print("Seed already applied, skipping.")
+        return
+
     # ── dimensions ──────────────────────────────────────────────────────────
     dim_map: dict[str, uuid.UUID] = {}
     for d in DIMENSIONS:
