@@ -12,6 +12,7 @@ class OrgUnitCreate(BaseModel):
     parent_id: UUID | None = None
     sort_order: int = 0
     competency_codes: list[str] = Field(default_factory=list)
+    active_dimension_codes: list[str] | None = None
 
 
 class OrgUnitUpdate(BaseModel):
@@ -20,6 +21,7 @@ class OrgUnitUpdate(BaseModel):
     parent_id: UUID | None = None
     sort_order: int | None = None
     competency_codes: list[str] | None = None
+    active_dimension_codes: list[str] | None = None
 
 
 class OrgUnitOut(BaseModel):
@@ -30,6 +32,7 @@ class OrgUnitOut(BaseModel):
     unit_type: str
     sort_order: int
     competency_codes: list[str]
+    active_dimension_codes: list[str] | None = None
     children: list[OrgUnitOut] = []
 
     model_config = {"from_attributes": True}

@@ -51,6 +51,7 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
     status: Mapped[AssessmentStatus] = mapped_column(Enum(AssessmentStatus), nullable=False, default=AssessmentStatus.DRAFT)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    org_context: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="assessments")
     creator: Mapped["User"] = relationship("User")

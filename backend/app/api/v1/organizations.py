@@ -33,6 +33,7 @@ def _build_tree(units: list[OrgUnit]) -> list[OrgUnitOut]:
             unit_type=u.unit_type,
             sort_order=u.sort_order,
             competency_codes=u.competency_codes or [],
+            active_dimension_codes=u.active_dimension_codes,
             children=[],
         )
     roots: list[OrgUnitOut] = []
@@ -173,6 +174,7 @@ async def create_unit(
         unit_type=body.unit_type,
         sort_order=body.sort_order,
         competency_codes=body.competency_codes,
+        active_dimension_codes=body.active_dimension_codes,
     )
     db.add(unit)
     await db.commit()
@@ -180,7 +182,8 @@ async def create_unit(
     return OrgUnitOut(
         id=unit.id, org_id=unit.org_id, parent_id=unit.parent_id,
         name=unit.name, unit_type=unit.unit_type,
-        sort_order=unit.sort_order, competency_codes=unit.competency_codes, children=[],
+        sort_order=unit.sort_order, competency_codes=unit.competency_codes,
+        active_dimension_codes=unit.active_dimension_codes, children=[],
     )
 
 
@@ -207,12 +210,15 @@ async def update_unit(
         unit.sort_order = body.sort_order
     if body.competency_codes is not None:
         unit.competency_codes = body.competency_codes
+    if "active_dimension_codes" in body.model_fields_set:
+        unit.active_dimension_codes = body.active_dimension_codes
     await db.commit()
     await db.refresh(unit)
     return OrgUnitOut(
         id=unit.id, org_id=unit.org_id, parent_id=unit.parent_id,
         name=unit.name, unit_type=unit.unit_type,
-        sort_order=unit.sort_order, competency_codes=unit.competency_codes, children=[],
+        sort_order=unit.sort_order, competency_codes=unit.competency_codes,
+        active_dimension_codes=unit.active_dimension_codes, children=[],
     )
 
 

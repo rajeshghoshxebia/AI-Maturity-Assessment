@@ -10,6 +10,7 @@ class AssessmentCreate(BaseModel):
     organization_name: str = Field(min_length=1, max_length=255)
     mode: AssessmentMode = AssessmentMode.CONSULTANT
     notes: str | None = None
+    org_context: str | None = None
     active_subcategory_codes: list[str] = Field(default_factory=list)
     org_id: UUID | None = None
     org_unit_id: UUID | None = None
@@ -19,6 +20,7 @@ class AssessmentCreate(BaseModel):
 class AssessmentUpdate(BaseModel):
     organization_name: str | None = Field(default=None, max_length=255)
     notes: str | None = None
+    org_context: str | None = None
     status: AssessmentStatus | None = None
     active_subcategory_codes: list[str] | None = None
 
@@ -38,6 +40,7 @@ class AssessmentOut(BaseModel):
     mode: AssessmentMode
     status: AssessmentStatus
     notes: str | None
+    org_context: str | None = None
     created_at: datetime
     completed_at: datetime | None
     active_subcategories: list[SubcategoryRefOut] = []

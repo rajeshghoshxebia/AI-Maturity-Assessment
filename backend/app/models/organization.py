@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -46,6 +47,7 @@ class OrgUnit(Base):
     unit_type: Mapped[str] = mapped_column(String(50), nullable=False, default="TEAM")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     competency_codes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    active_dimension_codes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     organization: Mapped[Organization] = relationship("Organization", back_populates="units")
     parent: Mapped[OrgUnit | None] = relationship(

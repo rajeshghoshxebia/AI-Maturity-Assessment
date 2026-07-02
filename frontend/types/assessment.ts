@@ -54,12 +54,18 @@ export interface Assessment {
   mode: AssessmentMode;
   status: AssessmentStatus;
   notes: string | null;
+  org_context: string | null;
   created_at: string;
   updated_at: string;
   active_subcategories: TechSubcategory[];
   org_id: string | null;
   org_unit_id: string | null;
   per_team: boolean;
+}
+
+export interface GenerateReportResponse {
+  narrative: string;
+  model_used: string;
 }
 
 export interface AssessmentCreate {
