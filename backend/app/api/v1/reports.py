@@ -116,27 +116,27 @@ async def generate_ai_report(
 
     prompt = "\n".join(prompt_parts)
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="ANTHROPIC_API_KEY is not configured. Set it in the backend environment to enable AI report generation.",
+            detail="OPENAI_API_KEY is not configured. Set it in the backend environment to enable AI report generation.",
         )
 
     try:
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
-        narrative = message.content[0].text
-        model_used = message.model
+        narrative = response.choices[0].message.content or ""
+        model_used = response.model
     except ImportError:
         raise HTTPException(
             status_code=503,
-            detail="anthropic package is not installed. Run: pip install anthropic",
+            detail="openai package is not installed. Run: pip install openai",
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)}")

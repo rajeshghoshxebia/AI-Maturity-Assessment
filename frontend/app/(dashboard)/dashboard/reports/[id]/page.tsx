@@ -139,7 +139,7 @@ export default function ReportPage() {
       const result = await api.post<GenerateReportResponse>(`/assessments/${id}/generate-report`, { include_recommendations: true });
       setAiNarrative(result.narrative);
     } catch (e: any) {
-      setAiError(e?.message ?? "Failed to generate narrative. Check that ANTHROPIC_API_KEY is configured on the backend.");
+      setAiError(e?.message ?? "Failed to generate narrative. Check that OPENAI_API_KEY is configured on the backend.");
     } finally {
       setGeneratingAI(false);
     }
