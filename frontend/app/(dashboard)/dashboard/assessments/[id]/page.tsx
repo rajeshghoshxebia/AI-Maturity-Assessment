@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, BarChart2, Check, CheckCircle2, ChevronDown, ChevronUp,
-  Circle, Copy, Mail, Settings2, Trash2, Users, X,
+  Circle, Copy, Edit2, Mail, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
@@ -190,6 +190,119 @@ function DimPickerModal({
   );
 }
 
+// ── Edit assessment modal ─────────────────────────────────────────────────────
+
+const ALL_STATUSES = ["DRAFT", "IN_PROGRESS", "COMPLETED", "ARCHIVED"] as const;
+type AssessmentStatus = typeof ALL_STATUSES[number];
+const STATUS_LABEL: Record<AssessmentStatus, string> = {
+  DRAFT: "Draft", IN_PROGRESS: "In Progress", COMPLETED: "Completed", ARCHIVED: "Archived",
+};
+
+function EditAssessmentModal({
+  assessment,
+  onClose,
+  onSave,
+}: {
+  assessment: Assessment;
+  onClose: () => void;
+  onSave: (updated: Assessment) => void;
+}) {
+  const [form, setForm] = useState({
+    organization_name: assessment.organization_name,
+    status: assessment.status as AssessmentStatus,
+    notes: assessment.notes ?? "",
+    org_context: assessment.org_context ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!form.organization_name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await api.patch<Assessment>(`/assessments/${assessment.id}`, {
+        organization_name: form.organization_name,
+        status: form.status,
+        notes: form.notes || null,
+        org_context: form.org_context || null,
+      });
+      onSave(updated);
+    } catch {
+      setError("Failed to save changes.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-elevated w-full max-w-lg p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-grey-900">Edit Assessment</h3>
+          <button onClick={onClose} className="text-grey-400 hover:text-grey-700"><X className="h-4 w-4" /></button>
+        </div>
+        {error && <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Organisation name *</label>
+            <input
+              type="text"
+              required
+              value={form.organization_name}
+              onChange={(e) => setForm((f) => ({ ...f, organization_name: e.target.value }))}
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Status</label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as AssessmentStatus }))}
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm bg-white focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            >
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">
+              Organisation context <span className="text-grey-400 font-normal">(used by AI report)</span>
+            </label>
+            <textarea
+              rows={4}
+              value={form.org_context}
+              onChange={(e) => setForm((f) => ({ ...f, org_context: e.target.value }))}
+              placeholder="Describe the organisation, industry, challenges, strategic priorities…"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Notes</label>
+            <textarea
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              placeholder="Assessment scope, instructions, observations…"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 rounded-md border border-grey-200 py-2 text-sm font-medium text-grey-600 hover:bg-grey-50">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving || !form.organization_name.trim()}
+            className="flex-1 rounded-md bg-velvet py-2 text-sm font-medium text-white hover:bg-velvet-dark disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function flatUnits(units: OrgUnit[]): OrgUnit[] {
@@ -209,6 +322,8 @@ export default function AssessmentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [activeDim, setActiveDim] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, { score: number; observations: string }>>({});
+
+  const [editOpen, setEditOpen] = useState(false);
 
   // Per-team state
   const [org, setOrg] = useState<Organization | null>(null);
@@ -328,6 +443,16 @@ export default function AssessmentDetailPage() {
     }
   }
 
+  async function deleteAssessment() {
+    if (!confirm(`Delete assessment "${assessment?.organization_name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/assessments/${id}`);
+      router.push("/dashboard/assessments");
+    } catch {
+      alert("Failed to delete assessment.");
+    }
+  }
+
   const answeredCount = Object.keys(responses).length + Object.keys(pending).filter((k) => !responses[k]).length;
   const totalQuestions = visibleDimensions.reduce((sum, d) => sum + d.questions.length, 0);
 
@@ -346,6 +471,15 @@ export default function AssessmentDetailPage() {
         />
       )}
 
+      {/* Edit modal */}
+      {editOpen && (
+        <EditAssessmentModal
+          assessment={assessment}
+          onClose={() => setEditOpen(false)}
+          onSave={(updated) => { setAssessment(updated); setEditOpen(false); }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
@@ -360,12 +494,29 @@ export default function AssessmentDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setEditOpen(true)}
+            title="Edit assessment"
+            className="inline-flex items-center gap-1.5 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
+          >
+            <Edit2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Edit</span>
+          </button>
+          <button
+            onClick={deleteAssessment}
+            title="Delete assessment"
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
           <Link
             href={`/dashboard/reports/${id}`}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
           >
-            <BarChart2 className="h-4 w-4" /> Report
+            <BarChart2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Report</span>
           </Link>
           {Object.keys(pending).length > 0 && (
             <button onClick={saveResponses} disabled={saving} className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50">
