@@ -36,6 +36,7 @@ function NewAssessmentForm() {
     organization_name: "",
     mode: "CONSULTANT" as AssessmentMode,
     notes: "",
+    org_context: "",
     active_subcategory_codes: [] as string[],
   });
 
@@ -213,14 +214,28 @@ function NewAssessmentForm() {
           </div>
         </div>
 
+        {/* Organisation context */}
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-grey-700">
+            Organisation context <span className="text-grey-400 font-normal">(optional — used by AI report generator)</span>
+          </label>
+          <textarea
+            rows={5}
+            value={form.org_context}
+            onChange={(e) => setForm((f) => ({ ...f, org_context: e.target.value }))}
+            placeholder={"Describe the organisation: industry, size, current AI state, key challenges, strategic priorities, recent initiatives…\n\nThe more detail you add here, the more tailored the AI-generated report narrative will be."}
+            className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+          />
+        </div>
+
         {/* Notes */}
         <div className="space-y-1.5">
-          <label className="block text-sm font-medium text-grey-700">Notes <span className="text-grey-400 font-normal">(optional)</span></label>
+          <label className="block text-sm font-medium text-grey-700">Assessment notes <span className="text-grey-400 font-normal">(optional)</span></label>
           <textarea
             rows={3}
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            placeholder="Context, scope, or instructions for this assessment…"
+            placeholder="Scope, instructions, or observations specific to this assessment run…"
             className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
           />
         </div>

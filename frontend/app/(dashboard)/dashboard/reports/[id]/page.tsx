@@ -7,10 +7,13 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
-import { ArrowLeft, ChevronDown, ChevronRight, FileText, MessageSquare, Presentation, Users } from "lucide-react";
+import {
+  ArrowLeft, ChevronDown, ChevronRight, FileText, Layers, Loader2,
+  MessageSquare, Presentation, Sparkles, Users,
+} from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
-import type { Assessment, ScoreOut, HierarchyScoreOut, UnitScoreOut } from "@/types/assessment";
+import type { Assessment, ScoreOut, HierarchyScoreOut, UnitScoreOut, GenerateReportResponse } from "@/types/assessment";
 
 const VELVET = "#831B84";
 const MATURITY_COLORS: Record<string, string> = {
@@ -32,34 +35,48 @@ const DIM_NARRATIVE: Record<string, string> = {
 };
 
 const UNIT_TYPE_LABEL: Record<string, string> = {
-  DIVISION: "Division",
-  DEPARTMENT: "Department",
-  TEAM: "Team",
-  BUSINESS_UNIT: "Business Unit",
-  REGION: "Region",
+  DIVISION: "Division", DEPARTMENT: "Department", TEAM: "Team",
+  BUSINESS_UNIT: "Business Unit", REGION: "Region",
 };
 
-function maturityColor(label: string) {
-  return MATURITY_COLORS[label] ?? VELVET;
+type ReportLevel = "ALL" | "BUSINESS_UNIT" | "DEPARTMENT" | "TEAM";
+const LEVEL_OPTIONS: { value: ReportLevel; label: string }[] = [
+  { value: "ALL", label: "All levels" },
+  { value: "BUSINESS_UNIT", label: "Business Unit" },
+  { value: "DEPARTMENT", label: "Department" },
+  { value: "TEAM", label: "Team" },
+];
+
+function maturityColor(label: string) { return MATURITY_COLORS[label] ?? VELVET; }
+
+function flatUnits(units: UnitScoreOut[]): UnitScoreOut[] {
+  return units.flatMap((u) => [u, ...flatUnits(u.children)]);
 }
 
-// ── Hierarchy tree node ───────────────────────────────────────────────────────
+// ── Hierarchy tree ────────────────────────────────────────────────────────────
 
-function UnitTreeNode({ unit, depth = 0 }: { unit: UnitScoreOut; depth?: number }) {
+function UnitTreeNode({ unit, depth = 0, filterLevel }: { unit: UnitScoreOut; depth?: number; filterLevel: ReportLevel }) {
   const [expanded, setExpanded] = useState(depth < 2);
-  const hasChildren = unit.children.length > 0;
+  const filteredChildren = filterLevel === "ALL"
+    ? unit.children
+    : unit.children.filter((c) => c.unit_type === filterLevel || flatUnits(c.children).some((u) => u.unit_type === filterLevel));
+  const hasChildren = filteredChildren.length > 0;
+  const isHidden = filterLevel !== "ALL" && unit.unit_type !== filterLevel && !hasChildren;
+  if (isHidden) return null;
+
+  const dimmed = filterLevel !== "ALL" && unit.unit_type !== filterLevel;
 
   return (
     <div>
       <div
-        className={`flex items-center gap-2 rounded-md px-3 py-2 hover:bg-grey-50 transition-colors cursor-pointer ${depth === 0 ? "bg-grey-50" : ""}`}
+        className={`flex items-center gap-2 rounded-md px-3 py-2 transition-colors ${dimmed ? "opacity-50" : ""} ${depth === 0 ? "bg-grey-50" : ""} hover:bg-grey-50 ${hasChildren ? "cursor-pointer" : ""}`}
         style={{ paddingLeft: `${12 + depth * 20}px` }}
         onClick={() => hasChildren && setExpanded((v) => !v)}
       >
         <span className="shrink-0 w-4">
-          {hasChildren ? (
-            expanded ? <ChevronDown className="h-3.5 w-3.5 text-grey-400" /> : <ChevronRight className="h-3.5 w-3.5 text-grey-400" />
-          ) : <span className="h-3.5 w-3.5 block" />}
+          {hasChildren
+            ? expanded ? <ChevronDown className="h-3.5 w-3.5 text-grey-400" /> : <ChevronRight className="h-3.5 w-3.5 text-grey-400" />
+            : <span className="h-3.5 w-3.5 block" />}
         </span>
         <span className="flex-1 text-sm font-medium text-grey-800 truncate">{unit.unit_name}</span>
         <span className="text-xs text-grey-400 hidden sm:inline">{UNIT_TYPE_LABEL[unit.unit_type] ?? unit.unit_type}</span>
@@ -74,8 +91,8 @@ function UnitTreeNode({ unit, depth = 0 }: { unit: UnitScoreOut; depth?: number 
       </div>
       {expanded && hasChildren && (
         <div>
-          {unit.children.map((child) => (
-            <UnitTreeNode key={child.unit_id} unit={child} depth={depth + 1} />
+          {filteredChildren.map((child) => (
+            <UnitTreeNode key={child.unit_id} unit={child} depth={depth + 1} filterLevel={filterLevel} />
           ))}
         </div>
       )}
@@ -83,11 +100,7 @@ function UnitTreeNode({ unit, depth = 0 }: { unit: UnitScoreOut; depth?: number 
   );
 }
 
-// ── Team comparison bar chart ─────────────────────────────────────────────────
-
-function flatUnits(units: UnitScoreOut[]): UnitScoreOut[] {
-  return units.flatMap((u) => [u, ...flatUnits(u.children)]);
-}
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
@@ -98,6 +111,10 @@ export default function ReportPage() {
   const [hierarchy, setHierarchy] = useState<HierarchyScoreOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [reportLevel, setReportLevel] = useState<ReportLevel>("ALL");
+  const [aiNarrative, setAiNarrative] = useState<string | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -107,14 +124,26 @@ export default function ReportPage() {
       .then(([a, s]) => {
         setAssessment(a);
         setScore(s);
-        // Load hierarchy if per_team and org_id exists
         if (a.per_team && a.org_id) {
-          return api.get<HierarchyScoreOut>(`/assessments/${id}/responses/score/hierarchy`).then(setHierarchy).catch(() => {});
+          api.get<HierarchyScoreOut>(`/assessments/${id}/responses/score/hierarchy`).then(setHierarchy).catch(() => {});
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [id]);
+
+  async function generateAINarrative() {
+    setGeneratingAI(true);
+    setAiError(null);
+    try {
+      const result = await api.post<GenerateReportResponse>(`/assessments/${id}/generate-report`, { include_recommendations: true });
+      setAiNarrative(result.narrative);
+    } catch (e: any) {
+      setAiError(e?.message ?? "Failed to generate narrative. Check that OPENAI_API_KEY is configured on the backend.");
+    } finally {
+      setGeneratingAI(false);
+    }
+  }
 
   async function exportPdf() {
     if (!reportRef.current) return;
@@ -142,28 +171,40 @@ export default function ReportPage() {
       prs.title = `AI Maturity Report – ${assessment.organization_name}`;
 
       // Slide 1: Title
-      const slide1 = prs.addSlide();
-      slide1.background = { color: "150027" };
-      slide1.addText("AI Maturity Assessment", { x: 0.5, y: 1.2, w: 12, h: 0.8, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
-      slide1.addText(assessment.organization_name, { x: 0.5, y: 2.2, w: 12, h: 0.6, fontSize: 22, color: "E0C8E0", fontFace: "Arial" });
-      slide1.addText(`Overall Score: ${formatScore(score.overall_score)} / 5.0  ·  ${score.maturity_label}`, {
-        x: 0.5, y: 3.0, w: 12, h: 0.5, fontSize: 16, color: "C9A0CA", fontFace: "Arial",
-      });
-      slide1.addText(`Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, {
-        x: 0.5, y: 6.5, w: 12, h: 0.4, fontSize: 11, color: "888888", fontFace: "Arial",
-      });
+      const s1 = prs.addSlide();
+      s1.background = { color: "150027" };
+      s1.addText("AI Maturity Assessment", { x: 0.5, y: 1.2, w: 12, h: 0.8, fontSize: 32, bold: true, color: "FFFFFF", fontFace: "Arial" });
+      s1.addText(assessment.organization_name, { x: 0.5, y: 2.2, w: 12, h: 0.6, fontSize: 22, color: "E0C8E0", fontFace: "Arial" });
+      s1.addText(`Overall Score: ${formatScore(score.overall_score)} / 5.0  ·  ${score.maturity_label}`, { x: 0.5, y: 3.0, w: 12, h: 0.5, fontSize: 16, color: "C9A0CA", fontFace: "Arial" });
+      s1.addText(`Generated ${new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, { x: 0.5, y: 6.5, w: 12, h: 0.4, fontSize: 11, color: "888888", fontFace: "Arial" });
 
-      // Slide 2: Consultant notes (if present)
-      if (assessment.notes?.trim()) {
-        const slide2 = prs.addSlide();
-        slide2.addText("Consultant Notes", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
-        slide2.addShape("rect", { x: 0.5, y: 1.0, w: 12.5, h: 0.05, fill: { color: "831B84" } });
-        slide2.addText(assessment.notes, { x: 0.5, y: 1.3, w: 12.5, h: 5.5, fontSize: 13, color: "374151", fontFace: "Arial", valign: "top", wrap: true });
+      // Slide 2: Organisation context
+      if (assessment.org_context?.trim()) {
+        const s2 = prs.addSlide();
+        s2.addText("Organisation Context", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+        s2.addShape("rect", { x: 0.5, y: 1.0, w: 12.5, h: 0.05, fill: { color: "831B84" } });
+        s2.addText(assessment.org_context, { x: 0.5, y: 1.3, w: 12.5, h: 5.5, fontSize: 12, color: "374151", fontFace: "Arial", valign: "top", wrap: true });
       }
 
-      // Slide 3: Dimension scores table
-      const slide3 = prs.addSlide();
-      slide3.addText("Dimension Scores", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+      // Slide 3: AI Narrative (if generated)
+      if (aiNarrative) {
+        const s3 = prs.addSlide();
+        s3.addText("AI Report Narrative", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+        s3.addShape("rect", { x: 0.5, y: 1.0, w: 12.5, h: 0.05, fill: { color: "831B84" } });
+        s3.addText(aiNarrative.slice(0, 2000), { x: 0.5, y: 1.3, w: 12.5, h: 5.5, fontSize: 10, color: "374151", fontFace: "Arial", valign: "top", wrap: true });
+      }
+
+      // Slide 4: Consultant notes
+      if (assessment.notes?.trim()) {
+        const s4 = prs.addSlide();
+        s4.addText("Consultant Notes", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+        s4.addShape("rect", { x: 0.5, y: 1.0, w: 12.5, h: 0.05, fill: { color: "831B84" } });
+        s4.addText(assessment.notes, { x: 0.5, y: 1.3, w: 12.5, h: 5.5, fontSize: 13, color: "374151", fontFace: "Arial", valign: "top", wrap: true });
+      }
+
+      // Slide 5: Dimension scores table
+      const s5 = prs.addSlide();
+      s5.addText("Dimension Scores", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
       const rows: any[] = [
         [
           { text: "Dimension", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
@@ -178,29 +219,27 @@ export default function ReportPage() {
           { text: DIM_NARRATIVE[d.code] ?? "" },
         ]),
       ];
-      slide3.addTable(rows, { x: 0.5, y: 1.0, w: 12.5, colW: [2.8, 0.8, 1.8, 7.1], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
+      s5.addTable(rows, { x: 0.5, y: 1.0, w: 12.5, colW: [2.8, 0.8, 1.8, 7.1], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
 
-      // Slide 4: Strengths & focus areas
-      const slide4 = prs.addSlide();
-      slide4.addText("Strengths & Areas for Improvement", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
-      const sorted = [...score.dimensions].sort((a, b) => b.score - a.score);
-      const top3 = sorted.slice(0, 3);
-      const bottom3 = sorted.slice(-3).reverse();
-      slide4.addText("Top performing dimensions", { x: 0.5, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "059669", fontFace: "Arial" });
-      top3.forEach((d, i) => {
-        slide4.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 0.7, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
+      // Slide 6: Strengths & focus areas
+      const s6 = prs.addSlide();
+      s6.addText("Strengths & Improvement Areas", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+      const sortedDims = [...score.dimensions].sort((a, b) => b.score - a.score);
+      s6.addText("Top performing", { x: 0.5, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "059669", fontFace: "Arial" });
+      sortedDims.slice(0, 3).forEach((d, i) => {
+        s6.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 0.7, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
       });
-      slide4.addText("Focus areas for improvement", { x: 7, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "DC2626", fontFace: "Arial" });
-      bottom3.forEach((d, i) => {
-        slide4.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 7.2, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
+      s6.addText("Focus areas", { x: 7, y: 1.1, w: 6, h: 0.4, fontSize: 14, bold: true, color: "DC2626", fontFace: "Arial" });
+      [...sortedDims].reverse().slice(0, 3).forEach((d, i) => {
+        s6.addText(`${i + 1}. ${d.name} — ${formatScore(d.score)} (${d.label})`, { x: 7.2, y: 1.6 + i * 0.5, w: 6, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" });
       });
 
-      // Slide 5: Hierarchy / team breakdown (if available)
+      // Slide 7: Team breakdown (if hierarchy)
       if (hierarchy) {
         const allTeams = flatUnits(hierarchy.units).filter((u) => u.overall_score > 0);
         if (allTeams.length > 0) {
-          const slide5 = prs.addSlide();
-          slide5.addText("Team Maturity Breakdown", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+          const s7 = prs.addSlide();
+          s7.addText("Team Maturity Breakdown", { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
           const teamRows: any[] = [
             [
               { text: "Team / Unit", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
@@ -215,7 +254,7 @@ export default function ReportPage() {
               { text: u.maturity_label },
             ]),
           ];
-          slide5.addTable(teamRows, { x: 0.5, y: 1.0, w: 12.5, colW: [5, 2, 1.5, 4], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
+          s7.addTable(teamRows, { x: 0.5, y: 1.0, w: 12.5, colW: [5, 2, 1.5, 4], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
         }
       }
 
@@ -232,13 +271,16 @@ export default function ReportPage() {
   const barData = score.dimensions.map((d) => ({ name: d.name, score: d.score, label: d.label }));
   const sorted = [...score.dimensions].sort((a, b) => b.score - a.score);
 
-  // Team comparison data
-  const allTeams = hierarchy ? flatUnits(hierarchy.units).filter((u) => u.overall_score > 0) : [];
+  // Team comparison — filtered by level
+  const allHierarchyUnits = hierarchy ? flatUnits(hierarchy.units).filter((u) => u.overall_score > 0) : [];
+  const visibleTeams = reportLevel === "ALL"
+    ? allHierarchyUnits
+    : allHierarchyUnits.filter((u) => u.unit_type === reportLevel);
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div className="flex items-start gap-3">
           <Link href={`/dashboard/assessments/${id}`} className="text-grey-400 hover:text-grey-700 mt-1">
             <ArrowLeft className="h-5 w-5" />
@@ -248,25 +290,42 @@ export default function ReportPage() {
             <p className="text-grey-500 text-sm mt-0.5">AI Maturity Assessment · {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Level filter — only show when hierarchy has data */}
+          {hierarchy && allHierarchyUnits.length > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg border border-grey-200 p-1 bg-white">
+              <Layers className="h-3.5 w-3.5 text-grey-400 ml-1 shrink-0" />
+              {LEVEL_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setReportLevel(opt.value)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    reportLevel === opt.value ? "bg-velvet text-white" : "text-grey-600 hover:bg-grey-100"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={exportPdf}
             disabled={exporting}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors disabled:opacity-50"
           >
-            <FileText className="h-4 w-4" /> {exporting ? "Exporting…" : "Export PDF"}
+            <FileText className="h-4 w-4" /> {exporting ? "Exporting…" : "PDF"}
           </button>
           <button
             onClick={exportPpt}
             disabled={exporting}
             className="inline-flex items-center gap-2 rounded-md bg-velvet px-3 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50"
           >
-            <Presentation className="h-4 w-4" /> {exporting ? "Exporting…" : "Export PPT"}
+            <Presentation className="h-4 w-4" /> {exporting ? "Exporting…" : "PPT"}
           </button>
         </div>
       </div>
 
-      {/* Printable report body */}
+      {/* Printable body */}
       <div ref={reportRef} className="space-y-6 bg-white">
 
         {/* Summary banner */}
@@ -275,9 +334,7 @@ export default function ReportPage() {
             <div>
               <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Overall AI Maturity</p>
               <p className="text-5xl font-bold">{formatScore(score.overall_score)}<span className="text-2xl text-white/50 ml-1">/ 5.0</span></p>
-              <span className={`maturity-badge mt-2 inline-block ${maturityBadgeClass(score.maturity_label)}`}>
-                {score.maturity_label}
-              </span>
+              <span className={`maturity-badge mt-2 inline-block ${maturityBadgeClass(score.maturity_label)}`}>{score.maturity_label}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
               {score.dimensions.map((d) => (
@@ -290,6 +347,48 @@ export default function ReportPage() {
           </div>
         </div>
 
+        {/* Organisation context */}
+        {assessment.org_context?.trim() && (
+          <div className="rounded-xl border border-grey-200 bg-grey-50 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Layers className="h-4 w-4 text-grey-500 shrink-0" />
+              <h3 className="font-semibold text-grey-700">Organisation Context</h3>
+            </div>
+            <p className="text-sm text-grey-600 leading-relaxed whitespace-pre-wrap">{assessment.org_context}</p>
+          </div>
+        )}
+
+        {/* AI Narrative */}
+        <div className="rounded-xl border border-velvet/20 bg-white p-5">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-velvet shrink-0" />
+              <h3 className="font-semibold text-velvet">AI-Generated Narrative</h3>
+              {aiNarrative && <span className="text-xs text-grey-400 font-normal">· generated by Claude</span>}
+            </div>
+            <button
+              onClick={generateAINarrative}
+              disabled={generatingAI}
+              className="inline-flex items-center gap-1.5 rounded-md bg-velvet px-3 py-1.5 text-xs font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-60"
+            >
+              {generatingAI ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</> : <><Sparkles className="h-3.5 w-3.5" /> {aiNarrative ? "Regenerate" : "Generate report"}</>}
+            </button>
+          </div>
+          {aiError && (
+            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{aiError}</div>
+          )}
+          {aiNarrative ? (
+            <div className="prose prose-sm max-w-none text-grey-700 whitespace-pre-wrap leading-relaxed text-sm">{aiNarrative}</div>
+          ) : (
+            !aiError && (
+              <p className="text-sm text-grey-400 italic">
+                Click "Generate report" to create a curated AI narrative based on the assessment scores
+                {assessment.org_context ? ", organisation context" : ""}{assessment.notes ? ", and consultant notes" : ""}.
+              </p>
+            )
+          )}
+        </div>
+
         {/* Consultant notes */}
         {assessment.notes?.trim() && (
           <div className="rounded-xl border border-velvet/20 bg-velvet/5 p-5">
@@ -297,13 +396,11 @@ export default function ReportPage() {
               <MessageSquare className="h-4 w-4 text-velvet shrink-0" />
               <h3 className="font-semibold text-velvet">Consultant Notes</h3>
             </div>
-            <div className="prose prose-sm max-w-none text-grey-700 whitespace-pre-wrap leading-relaxed">
-              {assessment.notes}
-            </div>
+            <p className="text-sm text-grey-700 whitespace-pre-wrap leading-relaxed">{assessment.notes}</p>
           </div>
         )}
 
-        {/* Hierarchy overview (per-team) */}
+        {/* Hierarchy overview */}
         {hierarchy && (
           <div className="card">
             <div className="flex items-center gap-2 mb-4">
@@ -313,36 +410,32 @@ export default function ReportPage() {
             </div>
             <div className="divide-y divide-grey-100 -mx-4 sm:-mx-6">
               {hierarchy.units.map((unit) => (
-                <UnitTreeNode key={unit.unit_id} unit={unit} depth={0} />
+                <UnitTreeNode key={unit.unit_id} unit={unit} depth={0} filterLevel={reportLevel} />
               ))}
             </div>
-            {hierarchy.units.length === 0 && (
-              <p className="text-sm text-grey-400 italic text-center py-4">No teams scored yet.</p>
-            )}
+            {hierarchy.units.length === 0 && <p className="text-sm text-grey-400 italic text-center py-4">No teams scored yet.</p>}
           </div>
         )}
 
         {/* Team comparison bar chart */}
-        {allTeams.length > 1 && (
+        {visibleTeams.length > 1 && (
           <div className="card">
-            <h3 className="font-semibold text-grey-900 mb-4">Team Comparison</h3>
-            <ResponsiveContainer width="100%" height={Math.max(200, allTeams.length * 40)}>
+            <h3 className="font-semibold text-grey-900 mb-1">
+              Team Comparison
+              {reportLevel !== "ALL" && <span className="ml-2 text-xs font-normal text-grey-400">({LEVEL_OPTIONS.find((o) => o.value === reportLevel)?.label})</span>}
+            </h3>
+            <ResponsiveContainer width="100%" height={Math.max(200, visibleTeams.length * 40)}>
               <BarChart
-                data={allTeams.map((u) => ({ name: u.unit_name, score: u.overall_score, label: u.maturity_label }))}
+                data={visibleTeams.map((u) => ({ name: u.unit_name, score: u.overall_score, label: u.maturity_label }))}
                 layout="vertical"
                 margin={{ top: 0, right: 60, bottom: 0, left: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickCount={6} />
                 <YAxis dataKey="name" type="category" width={160} tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <Tooltip
-                  formatter={(v: number) => [formatScore(v), "Score"]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
-                />
+                <Tooltip formatter={(v: number) => [formatScore(v), "Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
                 <Bar dataKey="score" radius={[0, 4, 4, 0]} maxBarSize={24}>
-                  {allTeams.map((u, i) => (
-                    <Cell key={i} fill={maturityColor(u.maturity_label)} />
-                  ))}
+                  {visibleTeams.map((u, i) => <Cell key={i} fill={maturityColor(u.maturity_label)} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -351,7 +444,6 @@ export default function ReportPage() {
 
         {/* Charts */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Spider chart */}
           <div className="card">
             <h3 className="font-semibold text-grey-900 mb-4">Maturity Spider Chart</h3>
             <ResponsiveContainer width="100%" height={320}>
@@ -363,8 +455,6 @@ export default function ReportPage() {
               </RadarChart>
             </ResponsiveContainer>
           </div>
-
-          {/* Bar chart */}
           <div className="card">
             <h3 className="font-semibold text-grey-900 mb-4">Dimension Scores</h3>
             <ResponsiveContainer width="100%" height={320}>
@@ -372,21 +462,16 @@ export default function ReportPage() {
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                 <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickCount={6} />
                 <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: "#6b7280" }} />
-                <Tooltip
-                  formatter={(v: number) => [formatScore(v), "Score"]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
-                />
+                <Tooltip formatter={(v: number) => [formatScore(v), "Score"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
                 <Bar dataKey="score" radius={[0, 4, 4, 0]} maxBarSize={28}>
-                  {barData.map((d, i) => (
-                    <Cell key={i} fill={maturityColor(d.label)} />
-                  ))}
+                  {barData.map((d, i) => <Cell key={i} fill={maturityColor(d.label)} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Dimension detail cards */}
+        {/* Dimension cards */}
         <div>
           <h3 className="font-semibold text-grey-900 mb-3">Dimension Analysis</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -409,7 +494,7 @@ export default function ReportPage() {
           </div>
         </div>
 
-        {/* Strengths & focus areas */}
+        {/* Strengths & focus */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="card border-green-100">
             <h4 className="font-semibold text-green-800 mb-3 flex items-center gap-2">

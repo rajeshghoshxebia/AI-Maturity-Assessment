@@ -8,6 +8,7 @@ export interface OrgUnit {
   unit_type: UnitType;
   sort_order: number;
   competency_codes: string[];
+  active_dimension_codes: string[] | null;
   children: OrgUnit[];
 }
 

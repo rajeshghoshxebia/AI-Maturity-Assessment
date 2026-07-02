@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, BarChart2, Check, CheckCircle2, ChevronDown, ChevronUp,
-  Circle, Copy, Mail, Trash2, Users,
+  Circle, Copy, Edit2, Mail, Settings2, Trash2, Users, X,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
@@ -74,7 +74,7 @@ function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName:
     <div className="card space-y-4">
       <div>
         <h3 className="font-semibold text-grey-900 flex items-center gap-2"><Mail className="h-4 w-4 text-velvet" /> Invite Stakeholders</h3>
-        <p className="text-xs text-grey-500 mt-0.5">Enter email addresses (one per line, or comma-separated). Optionally include names: <code className="bg-grey-100 px-1 rounded">Jane Smith &lt;jane@company.com&gt;</code></p>
+        <p className="text-xs text-grey-500 mt-0.5">Enter email addresses (one per line). Optionally: <code className="bg-grey-100 px-1 rounded">Jane Smith &lt;jane@co.com&gt;</code></p>
       </div>
       <textarea
         rows={4}
@@ -109,7 +109,7 @@ function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName:
                 </button>
               )}
               {inv.status === "PENDING" && (
-                <button onClick={() => revoke(inv.id)} title="Revoke invitation" className="text-grey-400 hover:text-red-500 transition-colors">
+                <button onClick={() => revoke(inv.id)} title="Revoke" className="text-grey-400 hover:text-red-500 transition-colors">
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
@@ -121,13 +121,198 @@ function InvitePanel({ assessmentId, orgName }: { assessmentId: string; orgName:
   );
 }
 
+// ── Dimension picker modal ────────────────────────────────────────────────────
+
+function DimPickerModal({
+  unit, allDimensions, onClose, onSave,
+}: {
+  unit: OrgUnit;
+  allDimensions: Dimension[];
+  onClose: () => void;
+  onSave: (codes: string[] | null) => void;
+}) {
+  const initial = unit.active_dimension_codes ?? allDimensions.map((d) => d.code);
+  const [selected, setSelected] = useState<Set<string>>(new Set(initial));
+  const [saving, setSaving] = useState(false);
+
+  function toggle(code: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      next.has(code) ? next.delete(code) : next.add(code);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    const allSelected = allDimensions.every((d) => selected.has(d.code));
+    onSave(allSelected ? null : Array.from(selected));
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-elevated w-full max-w-sm p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-grey-900">Dimensions for <span className="text-velvet">{unit.name}</span></h3>
+          <button onClick={onClose} className="text-grey-400 hover:text-grey-700"><X className="h-4 w-4" /></button>
+        </div>
+        <p className="text-xs text-grey-500">Choose which dimensions are assessed for this team. Deselected dimensions won't appear during scoring.</p>
+        <div className="space-y-1">
+          {allDimensions.map((d) => {
+            const active = selected.has(d.code);
+            return (
+              <button
+                key={d.code}
+                onClick={() => toggle(d.code)}
+                className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 text-sm text-left transition-colors ${active ? "bg-velvet/5 text-velvet" : "text-grey-600 hover:bg-grey-50"}`}
+              >
+                <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${active ? "border-velvet bg-velvet" : "border-grey-300"}`}>
+                  {active && <Check className="h-2.5 w-2.5 text-white" />}
+                </div>
+                <span className="font-medium">{d.name}</span>
+                <span className="ml-auto text-xs text-grey-400">{d.tag}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 rounded-md border border-grey-200 py-2 text-sm font-medium text-grey-600 hover:bg-grey-50">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving || selected.size === 0}
+            className="flex-1 rounded-md bg-velvet py-2 text-sm font-medium text-white hover:bg-velvet-dark disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit assessment modal ─────────────────────────────────────────────────────
+
+const ALL_STATUSES = ["DRAFT", "IN_PROGRESS", "COMPLETED", "ARCHIVED"] as const;
+type AssessmentStatus = typeof ALL_STATUSES[number];
+const STATUS_LABEL: Record<AssessmentStatus, string> = {
+  DRAFT: "Draft", IN_PROGRESS: "In Progress", COMPLETED: "Completed", ARCHIVED: "Archived",
+};
+
+function EditAssessmentModal({
+  assessment,
+  onClose,
+  onSave,
+}: {
+  assessment: Assessment;
+  onClose: () => void;
+  onSave: (updated: Assessment) => void;
+}) {
+  const [form, setForm] = useState({
+    organization_name: assessment.organization_name,
+    status: assessment.status as AssessmentStatus,
+    notes: assessment.notes ?? "",
+    org_context: assessment.org_context ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    if (!form.organization_name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await api.patch<Assessment>(`/assessments/${assessment.id}`, {
+        organization_name: form.organization_name,
+        status: form.status,
+        notes: form.notes || null,
+        org_context: form.org_context || null,
+      });
+      onSave(updated);
+    } catch {
+      setError("Failed to save changes.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-elevated w-full max-w-lg p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-grey-900">Edit Assessment</h3>
+          <button onClick={onClose} className="text-grey-400 hover:text-grey-700"><X className="h-4 w-4" /></button>
+        </div>
+        {error && <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Organisation name *</label>
+            <input
+              type="text"
+              required
+              value={form.organization_name}
+              onChange={(e) => setForm((f) => ({ ...f, organization_name: e.target.value }))}
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Status</label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as AssessmentStatus }))}
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm bg-white focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            >
+              {ALL_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">
+              Organisation context <span className="text-grey-400 font-normal">(used by AI report)</span>
+            </label>
+            <textarea
+              rows={4}
+              value={form.org_context}
+              onChange={(e) => setForm((f) => ({ ...f, org_context: e.target.value }))}
+              placeholder="Describe the organisation, industry, challenges, strategic priorities…"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-grey-700">Notes</label>
+            <textarea
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              placeholder="Assessment scope, instructions, observations…"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2 pt-1">
+          <button onClick={onClose} className="flex-1 rounded-md border border-grey-200 py-2 text-sm font-medium text-grey-600 hover:bg-grey-50">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving || !form.organization_name.trim()}
+            className="flex-1 rounded-md bg-velvet py-2 text-sm font-medium text-white hover:bg-velvet-dark disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
 function flatUnits(units: OrgUnit[]): OrgUnit[] {
   return units.flatMap((u) => [u, ...flatUnits(u.children)]);
 }
 
+// ── Main page ─────────────────────────────────────────────────────────────────
+
 export default function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
@@ -138,9 +323,12 @@ export default function AssessmentDetailPage() {
   const [activeDim, setActiveDim] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, { score: number; observations: string }>>({});
 
+  const [editOpen, setEditOpen] = useState(false);
+
   // Per-team state
   const [org, setOrg] = useState<Organization | null>(null);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [dimPickerUnit, setDimPickerUnit] = useState<OrgUnit | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -159,24 +347,37 @@ export default function AssessmentDetailPage() {
       }).filter((d) => d.code !== "TECHNOLOGY_STACK" || d.questions.length > 0);
       setDimensions(filtered);
       setAllResponses(resps);
-      if (filtered.length > 0) setActiveDim(filtered[0].id);
       if (existingScore) setScore(existingScore);
 
-      // Load org if per_team
       if (a.per_team && a.org_id) {
         api.get<Organization>(`/organizations/${a.org_id}`).then((o) => {
           setOrg(o);
           const units = flatUnits(o.units);
           if (units.length > 0) setSelectedUnitId(units[0].id);
         }).catch(() => {});
+      } else {
+        setActiveDim(filtered[0]?.id ?? null);
       }
     }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
 
-  // Derive responses for selected team
+  // When team changes, open first dimension
+  useEffect(() => {
+    if (dimensions.length > 0) setActiveDim(dimensions[0].id);
+  }, [selectedUnitId]);
+
+  const allTeams = org ? flatUnits(org.units) : [];
+  const selectedUnit = allTeams.find((u) => u.id === selectedUnitId) ?? null;
+
+  // Dimensions active for the selected team (null = all)
+  const activeDimCodes = selectedUnit?.active_dimension_codes ?? null;
+  const visibleDimensions = activeDimCodes
+    ? dimensions.filter((d) => activeDimCodes.includes(d.code))
+    : dimensions;
+
+  // Responses for the selected team
   const responses: Record<string, ResponseOut> = {};
   for (const r of allResponses) {
-    const key = assessment?.per_team ? `${r.org_unit_id ?? ""}:${r.question_id}` : r.question_id;
     if (assessment?.per_team) {
       if (r.org_unit_id === selectedUnitId) responses[r.question_id] = r;
     } else {
@@ -226,16 +427,59 @@ export default function AssessmentDetailPage() {
     setPending((p) => ({ ...p, [qid]: { score: currentScore, observations: obs } }));
   }
 
+  async function saveDimConfig(codes: string[] | null) {
+    if (!selectedUnit || !org) return;
+    try {
+      const updated = await api.patch<OrgUnit>(`/organizations/${org.id}/units/${selectedUnit.id}`, { active_dimension_codes: codes });
+      setOrg((prev) => {
+        if (!prev) return prev;
+        const patch = (units: OrgUnit[]): OrgUnit[] => units.map((u) =>
+          u.id === updated.id ? { ...u, active_dimension_codes: updated.active_dimension_codes } : { ...u, children: patch(u.children) }
+        );
+        return { ...prev, units: patch(prev.units) };
+      });
+    } finally {
+      setDimPickerUnit(null);
+    }
+  }
+
+  async function deleteAssessment() {
+    if (!confirm(`Delete assessment "${assessment?.organization_name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/assessments/${id}`);
+      router.push("/dashboard/assessments");
+    } catch {
+      alert("Failed to delete assessment.");
+    }
+  }
+
   const answeredCount = Object.keys(responses).length + Object.keys(pending).filter((k) => !responses[k]).length;
-  const totalQuestions = dimensions.reduce((sum, d) => sum + d.questions.length, 0);
+  const totalQuestions = visibleDimensions.reduce((sum, d) => sum + d.questions.length, 0);
 
   if (loading) return <div className="flex items-center justify-center h-64 text-grey-400">Loading assessment…</div>;
   if (!assessment) return <div className="text-grey-500">Assessment not found.</div>;
 
-  const allTeams = org ? flatUnits(org.units) : [];
-
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Dim config modal */}
+      {dimPickerUnit && (
+        <DimPickerModal
+          unit={dimPickerUnit}
+          allDimensions={dimensions}
+          onClose={() => setDimPickerUnit(null)}
+          onSave={saveDimConfig}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editOpen && (
+        <EditAssessmentModal
+          assessment={assessment}
+          onClose={() => setEditOpen(false)}
+          onSave={(updated) => { setAssessment(updated); setEditOpen(false); }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex items-start gap-3">
@@ -250,16 +494,33 @@ export default function AssessmentDetailPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setEditOpen(true)}
+            title="Edit assessment"
+            className="inline-flex items-center gap-1.5 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
+          >
+            <Edit2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Edit</span>
+          </button>
+          <button
+            onClick={deleteAssessment}
+            title="Delete assessment"
+            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Delete</span>
+          </button>
           <Link
             href={`/dashboard/reports/${id}`}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
           >
-            <BarChart2 className="h-4 w-4" /> Report
+            <BarChart2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Report</span>
           </Link>
           {Object.keys(pending).length > 0 && (
             <button onClick={saveResponses} disabled={saving} className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50">
-              {saving ? "Saving…" : `Save ${Object.keys(pending).length} response${Object.keys(pending).length > 1 ? "s" : ""}`}
+              {saving ? "Saving…" : `Save ${Object.keys(pending).length}`}
             </button>
           )}
         </div>
@@ -274,34 +535,61 @@ export default function AssessmentDetailPage() {
           </div>
           <div className="flex gap-1 p-2 flex-wrap">
             {allTeams.map((u) => {
-              const teamResponses = allResponses.filter((r) => r.org_unit_id === u.id);
-              const answered = teamResponses.length;
+              const teamAnswered = allResponses.filter((r) => r.org_unit_id === u.id).length;
               const isSelected = selectedUnitId === u.id;
+              const hasDimFilter = (u.active_dimension_codes?.length ?? 0) > 0;
               return (
-                <button
-                  key={u.id}
-                  onClick={() => { setSelectedUnitId(u.id); setPending({}); }}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    isSelected ? "bg-velvet text-white" : "text-grey-600 hover:bg-grey-100"
-                  }`}
-                >
-                  {u.name}
-                  {answered > 0 && (
-                    <span className={`rounded-full px-1.5 py-0.5 text-xs ${isSelected ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
-                      {answered}
-                    </span>
+                <div key={u.id} className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => { setSelectedUnitId(u.id); setPending({}); }}
+                    className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                      isSelected ? "bg-velvet text-white" : "text-grey-600 hover:bg-grey-100"
+                    }`}
+                  >
+                    {u.name}
+                    {teamAnswered > 0 && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-xs ${isSelected ? "bg-white/20 text-white" : "bg-green-100 text-green-700"}`}>
+                        {teamAnswered}
+                      </span>
+                    )}
+                    {hasDimFilter && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-xs ${isSelected ? "bg-white/20 text-white" : "bg-blue-100 text-blue-600"}`} title="Custom dimensions">
+                        {u.active_dimension_codes!.length}d
+                      </span>
+                    )}
+                  </button>
+                  {isSelected && (
+                    <button
+                      onClick={() => setDimPickerUnit(u)}
+                      title="Configure dimensions for this team"
+                      className="p-1.5 rounded-md text-grey-400 hover:text-velvet hover:bg-grey-100 transition-colors"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
+          {selectedUnit && activeDimCodes && (
+            <div className="px-4 pb-2.5 flex items-center gap-1.5 flex-wrap">
+              <span className="text-xs text-grey-400">Active dimensions:</span>
+              {activeDimCodes.map((code) => (
+                <span key={code} className="rounded-full bg-velvet/10 text-velvet text-xs px-2 py-0.5">
+                  {dimensions.find((d) => d.code === code)?.name ?? code}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Progress + score */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card">
-          <p className="text-xs text-grey-500 uppercase tracking-wide">Progress{assessment.per_team && selectedUnitId ? ` · ${allTeams.find((u) => u.id === selectedUnitId)?.name}` : ""}</p>
+          <p className="text-xs text-grey-500 uppercase tracking-wide">
+            Progress{assessment.per_team && selectedUnit ? ` · ${selectedUnit.name}` : ""}
+          </p>
           <p className="text-2xl font-semibold text-grey-900 mt-1">{answeredCount} / {totalQuestions}</p>
           <div className="mt-2 h-1.5 rounded-full bg-grey-100 overflow-hidden">
             <div className="h-full rounded-full bg-velvet transition-all" style={{ width: totalQuestions ? `${(answeredCount / totalQuestions) * 100}%` : "0%" }} />
@@ -337,7 +625,7 @@ export default function AssessmentDetailPage() {
 
       {/* Dimensions + questions */}
       <div className="space-y-2">
-        {dimensions.map((dim) => {
+        {visibleDimensions.map((dim) => {
           const open = activeDim === dim.id;
           const dimAnswered = dim.questions.filter((q) => responses[q.id] || pending[q.id]).length;
           return (
@@ -420,6 +708,12 @@ export default function AssessmentDetailPage() {
             </div>
           );
         })}
+        {visibleDimensions.length === 0 && assessment.per_team && selectedUnit && (
+          <div className="card text-center py-8 text-grey-400 text-sm">
+            No dimensions selected for {selectedUnit.name}.{" "}
+            <button onClick={() => setDimPickerUnit(selectedUnit)} className="text-velvet underline">Configure dimensions</button>
+          </div>
+        )}
       </div>
 
       {Object.keys(pending).length > 0 && (
