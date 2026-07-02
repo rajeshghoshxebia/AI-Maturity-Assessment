@@ -313,6 +313,7 @@ function flatUnits(units: OrgUnit[]): OrgUnit[] {
 
 export default function AssessmentDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
 
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
