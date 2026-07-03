@@ -330,9 +330,9 @@ export function HierarchyBuilder({ units, onChange, dimensions = [] }: Props) {
   }
 
   return (
-    <div className="border border-grey-200 rounded-lg overflow-hidden bg-white">
+    <div className="border border-grey-200 rounded-lg bg-white">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-grey-100 bg-grey-50">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-grey-100 bg-grey-50 rounded-t-lg">
         <p className="text-xs font-medium text-grey-500 uppercase tracking-wide">Hierarchy</p>
         <button
           type="button"
@@ -374,7 +374,7 @@ export function HierarchyBuilder({ units, onChange, dimensions = [] }: Props) {
         )}
       </div>
 
-      <p className="px-4 py-2 text-xs text-grey-400 border-t border-grey-100">
+      <p className="px-4 py-2 text-xs text-grey-400 border-t border-grey-100 rounded-b-lg bg-white">
         Double-click a name to rename · Click + to add a child unit · Use the dimensions dropdown to pick which dimensions each unit is assessed on
       </p>
     </div>
