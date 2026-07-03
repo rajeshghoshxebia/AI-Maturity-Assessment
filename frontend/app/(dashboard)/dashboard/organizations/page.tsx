@@ -107,7 +107,7 @@ export default function OrganizationsPage() {
         </div>
       )}
 
-      <div className="card p-0 overflow-hidden">
+      <div className="card p-0">
         {loading && (
           <div className="flex items-center justify-center py-20 text-grey-400 text-sm">
             Loading organizations…
@@ -130,11 +130,11 @@ export default function OrganizationsPage() {
             <table className="hidden md:table w-full text-sm">
               <thead>
                 <tr className="border-b border-grey-100 bg-grey-50">
-                  <th className="text-left px-6 py-3 font-medium text-grey-500 text-xs uppercase tracking-wide">Organization</th>
+                  <th className="text-left px-6 py-3 font-medium text-grey-500 text-xs uppercase tracking-wide rounded-tl-lg">Organization</th>
                   <th className="text-left px-6 py-3 font-medium text-grey-500 text-xs uppercase tracking-wide">Industry</th>
                   <th className="text-left px-6 py-3 font-medium text-grey-500 text-xs uppercase tracking-wide">Teams</th>
                   <th className="text-left px-6 py-3 font-medium text-grey-500 text-xs uppercase tracking-wide">Created</th>
-                  <th className="px-6 py-3 w-28" />
+                  <th className="px-6 py-3 w-28 rounded-tr-lg" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-grey-100">
