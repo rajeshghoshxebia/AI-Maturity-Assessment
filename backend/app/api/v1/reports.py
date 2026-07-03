@@ -125,8 +125,11 @@ async def generate_ai_report(
 
     try:
         import openai
-        client = openai.OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
+        # Async client + await: a synchronous call here would block the event
+        # loop for the whole (slow) completion, which makes the platform gateway
+        # time out and return a hard 502.
+        client = openai.AsyncOpenAI(api_key=api_key, timeout=120.0)
+        response = await client.chat.completions.create(
             model="gpt-4o",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -139,6 +142,6 @@ async def generate_ai_report(
             detail="openai package is not installed. Run: pip install openai",
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"AI generation failed: {type(e).__name__}: {e}")
 
     return GenerateReportResponse(narrative=narrative, model_used=model_used)

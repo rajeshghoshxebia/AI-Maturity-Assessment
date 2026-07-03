@@ -57,13 +57,21 @@ class Assessment(UUIDMixin, TimestampMixin, Base):
     creator: Mapped["User"] = relationship("User")
     organization: Mapped["Organization | None"] = relationship("Organization", back_populates="assessments")
     org_unit: Mapped["OrgUnit | None"] = relationship("OrgUnit", back_populates="assessments")
-    responses: Mapped[list["Response"]] = relationship("Response", back_populates="assessment")
-    survey_assignments: Mapped[list["SurveyAssignment"]] = relationship("SurveyAssignment", back_populates="assessment")
+    responses: Mapped[list["Response"]] = relationship(
+        "Response", back_populates="assessment",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
+    survey_assignments: Mapped[list["SurveyAssignment"]] = relationship(
+        "SurveyAssignment", back_populates="assessment",
+        cascade="all, delete-orphan", passive_deletes=True,
+    )
     active_subcategories: Mapped[list["AssessmentSubcategory"]] = relationship(
-        "AssessmentSubcategory", back_populates="assessment"
+        "AssessmentSubcategory", back_populates="assessment",
+        cascade="all, delete-orphan", passive_deletes=True,
     )
     invitations: Mapped[list["SurveyInvitation"]] = relationship(
-        "SurveyInvitation", back_populates="assessment", order_by="SurveyInvitation.created_at"
+        "SurveyInvitation", back_populates="assessment", order_by="SurveyInvitation.created_at",
+        cascade="all, delete-orphan", passive_deletes=True,
     )
 
 
