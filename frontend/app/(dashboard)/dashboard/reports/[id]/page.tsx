@@ -132,6 +132,13 @@ export default function ReportPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // For per-team assessments, the org-level report is the consolidated average
+  // across the hierarchy (BU = avg of departments, dept = avg of teams). Fall
+  // back to the flat pooled score for single-team assessments.
+  const rep: ScoreOut | null = hierarchy && hierarchy.dimensions.length > 0
+    ? { overall_score: hierarchy.overall_score, maturity_label: hierarchy.maturity_label, dimensions: hierarchy.dimensions }
+    : score;
+
   async function generateAINarrative() {
     setGeneratingAI(true);
     setAiError(null);
@@ -162,7 +169,8 @@ export default function ReportPage() {
   }
 
   async function exportPpt() {
-    if (!score || !assessment) return;
+    if (!rep || !assessment) return;
+    const score = rep;
     setExporting(true);
     try {
       const { default: PptxGenJS } = await import("pptxgenjs");
@@ -265,11 +273,12 @@ export default function ReportPage() {
   }
 
   if (loading) return <div className="flex h-64 items-center justify-center text-grey-400">Loading report…</div>;
-  if (!score || !assessment) return <div className="text-grey-500">No score data available. Complete the assessment first.</div>;
+  if (!rep || !assessment) return <div className="text-grey-500">No score data available. Complete the assessment first.</div>;
 
-  const radarData = score.dimensions.map((d) => ({ subject: d.name.replace(/ &| and /g, " &\n"), score: d.score, fullMark: 5 }));
-  const barData = score.dimensions.map((d) => ({ name: d.name, score: d.score, label: d.label }));
-  const sorted = [...score.dimensions].sort((a, b) => b.score - a.score);
+  const consolidated = hierarchy && hierarchy.dimensions.length > 0;
+  const radarData = rep.dimensions.map((d) => ({ subject: d.name.replace(/ &| and /g, " &\n"), score: d.score, fullMark: 5 }));
+  const barData = rep.dimensions.map((d) => ({ name: d.name, score: d.score, label: d.label }));
+  const sorted = [...rep.dimensions].sort((a, b) => b.score - a.score);
 
   // Team comparison — filtered by level
   const allHierarchyUnits = hierarchy ? flatUnits(hierarchy.units).filter((u) => u.overall_score > 0) : [];
@@ -332,12 +341,17 @@ export default function ReportPage() {
         <div className="rounded-xl border border-grey-100 bg-gradient-to-r from-[#150027] to-[#2d005a] p-6 text-white">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Overall AI Maturity</p>
-              <p className="text-5xl font-bold">{formatScore(score.overall_score)}<span className="text-2xl text-white/50 ml-1">/ 5.0</span></p>
-              <span className={`maturity-badge mt-2 inline-block ${maturityBadgeClass(score.maturity_label)}`}>{score.maturity_label}</span>
+              <p className="text-white/60 text-xs uppercase tracking-widest mb-1">
+                Overall AI Maturity{consolidated ? " · consolidated" : ""}
+              </p>
+              <p className="text-5xl font-bold">{formatScore(rep.overall_score)}<span className="text-2xl text-white/50 ml-1">/ 5.0</span></p>
+              <span className={`maturity-badge mt-2 inline-block ${maturityBadgeClass(rep.maturity_label)}`}>{rep.maturity_label}</span>
+              {consolidated && (
+                <p className="text-white/50 text-xs mt-2 max-w-xs">Averaged across the organisation hierarchy — each business unit, department, and team weighted equally.</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-              {score.dimensions.map((d) => (
+              {rep.dimensions.map((d) => (
                 <div key={d.code} className="flex items-center justify-between gap-4">
                   <span className="text-white/70 truncate max-w-[140px]">{d.name}</span>
                   <span className="font-semibold text-white">{formatScore(d.score)}</span>

@@ -158,6 +158,10 @@ async def get_hierarchy_score(
 
     all_units = {u.id: u for u in org.units}
 
+    # Canonical dimension ordering (for stable output of averaged rollups)
+    dim_order = {d.code: i for i, d in enumerate(dimensions)}
+    dim_name = {d.code: d.name for d in dimensions}
+
     def _dim_outs(responses: list) -> tuple[float, list[DimensionScoreOut]]:
         overall, ds_list = _build_score_from_responses(responses, dimensions)
         return overall, [
@@ -165,6 +169,35 @@ async def get_hierarchy_score(
                               score=ds.score, label=ds.label, response_count=ds.response_count)
             for ds in ds_list
         ]
+
+    def _avg_children(children: list[UnitScoreOut]) -> tuple[float, list[DimensionScoreOut]]:
+        """Roll a parent's score up as the mean of its scored children.
+
+        Each child (team) contributes equally: a department's score is the
+        average of its teams, a business unit's the average of its departments,
+        and so on up the tree. Per-dimension scores average only across the
+        children that actually have that dimension scored.
+        """
+        scored = [c for c in children if c.overall_score > 0]
+        if not scored:
+            return 0.0, []
+        overall = round(sum(c.overall_score for c in scored) / len(scored), 2)
+
+        by_code: dict[str, list[DimensionScoreOut]] = defaultdict(list)
+        for c in scored:
+            for d in c.dimensions:
+                if d.response_count > 0 or d.score > 0:
+                    by_code[d.code].append(d)
+
+        dim_scores: list[DimensionScoreOut] = []
+        for code, lst in by_code.items():
+            avg = round(sum(d.score for d in lst) / len(lst), 2)
+            dim_scores.append(DimensionScoreOut(
+                code=code, name=dim_name.get(code, lst[0].name), score=avg,
+                label=maturity_label(avg), response_count=sum(d.response_count for d in lst),
+            ))
+        dim_scores.sort(key=lambda d: dim_order.get(d.code, 999))
+        return overall, dim_scores
 
     def _collect(unit: OrgUnit) -> list:
         children = [u for u in all_units.values() if u.parent_id == unit.id]
@@ -176,9 +209,16 @@ async def get_hierarchy_score(
     def _build(unit: OrgUnit) -> UnitScoreOut:
         children_units = sorted([u for u in all_units.values() if u.parent_id == unit.id], key=lambda x: x.sort_order)
         child_scores = [_build(c) for c in children_units]
-        direct = by_unit.get(unit.id, [])
-        unit_responses = direct if direct else _collect(unit)
-        overall, dim_scores = _dim_outs(unit_responses)
+
+        # Parents roll up as the average of their scored children; leaves (or
+        # parents whose children have no scores) fall back to direct responses.
+        if any(c.overall_score > 0 for c in child_scores):
+            overall, dim_scores = _avg_children(child_scores)
+        else:
+            direct = by_unit.get(unit.id, [])
+            unit_responses = direct if direct else _collect(unit)
+            overall, dim_scores = _dim_outs(unit_responses)
+
         return UnitScoreOut(
             unit_id=str(unit.id), unit_name=unit.name, unit_type=unit.unit_type,
             overall_score=overall, maturity_label=maturity_label(overall),
@@ -187,7 +227,13 @@ async def get_hierarchy_score(
 
     root_units = sorted([u for u in org.units if u.parent_id is None], key=lambda x: x.sort_order)
     unit_trees = [_build(u) for u in root_units]
-    overall, dim_scores = _dim_outs(all_responses)
+
+    # Organisation total is the consolidated average across the top-level units
+    # (business units), keeping the whole report on one averaging model.
+    if any(u.overall_score > 0 for u in unit_trees):
+        overall, dim_scores = _avg_children(unit_trees)
+    else:
+        overall, dim_scores = _dim_outs(all_responses)
 
     return HierarchyScoreOut(
         org_name=org.name, org_industry=org.industry,

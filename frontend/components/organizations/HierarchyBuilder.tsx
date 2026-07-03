@@ -10,6 +10,7 @@ import {
   GripVertical,
   Check,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrgUnit, UnitType } from "@/types/organization";
@@ -21,19 +22,26 @@ interface LocalUnit {
   unit_type: UnitType;
   sort_order: number;
   competency_codes: string[];
+  active_dimension_codes: string[] | null;
   children: LocalUnit[];
+}
+
+interface DimensionOption {
+  code: string;
+  name: string;
 }
 
 interface Props {
   units: LocalUnit[];
   onChange: (units: LocalUnit[]) => void;
+  dimensions?: DimensionOption[];
 }
 
 let idSeq = 0;
 function newId() { return `new-${++idSeq}`; }
 
 function newUnit(parent_id: string | null, sort_order: number): LocalUnit {
-  return { id: newId(), parent_id, name: "New Team", unit_type: "TEAM", sort_order, competency_codes: [], children: [] };
+  return { id: newId(), parent_id, name: "New Team", unit_type: "TEAM", sort_order, competency_codes: [], active_dimension_codes: null, children: [] };
 }
 
 const TYPE_OPTIONS: { value: UnitType; label: string }[] = [
@@ -42,19 +50,105 @@ const TYPE_OPTIONS: { value: UnitType; label: string }[] = [
   { value: "TEAM", label: "Team" },
 ];
 
+// Per-unit dimension picker rendered as a dropdown. `null` = all dimensions active.
+function DimDropdown({
+  unit,
+  dimensions,
+  onChange,
+}: {
+  unit: LocalUnit;
+  dimensions: DimensionOption[];
+  onChange: (id: string, codes: string[] | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const active = unit.active_dimension_codes;
+  const isAll = active === null;
+  const count = isAll ? dimensions.length : active.length;
+  const label = isAll ? "All dimensions" : `${count} of ${dimensions.length}`;
+
+  function toggle(code: string) {
+    const current = active ?? dimensions.map((d) => d.code);
+    const next = current.includes(code)
+      ? current.filter((c) => c !== code)
+      : [...current, code];
+    // Selecting everything collapses back to null (= all active, no override).
+    onChange(unit.id, next.length === dimensions.length ? null : next);
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          "flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs transition-colors",
+          isAll ? "border-grey-200 text-grey-500 hover:border-velvet" : "border-velvet/40 bg-velvet/5 text-velvet",
+        )}
+        title="Dimensions assessed for this unit"
+      >
+        <SlidersHorizontal className="h-3 w-3" />
+        <span className="hidden sm:inline">{label}</span>
+        <ChevronDown className="h-3 w-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-7 z-20 w-56 rounded-lg border border-grey-200 bg-white shadow-elevated p-1.5">
+            <div className="flex items-center justify-between px-2 py-1">
+              <p className="text-xs font-medium text-grey-500 uppercase tracking-wide">Dimensions</p>
+              <button
+                type="button"
+                onClick={() => onChange(unit.id, null)}
+                className="text-xs text-velvet hover:underline"
+              >
+                All
+              </button>
+            </div>
+            <div className="max-h-64 overflow-auto">
+              {dimensions.map((d) => {
+                const checked = isAll || active!.includes(d.code);
+                return (
+                  <button
+                    key={d.code}
+                    type="button"
+                    onClick={() => toggle(d.code)}
+                    className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-grey-700 hover:bg-grey-50"
+                  >
+                    <span className={cn(
+                      "h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0",
+                      checked ? "border-velvet bg-velvet" : "border-grey-300",
+                    )}>
+                      {checked && <Check className="h-2.5 w-2.5 text-white" />}
+                    </span>
+                    <span className="truncate">{d.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function UnitRow({
   unit,
   depth,
+  dimensions,
   onAdd,
   onRename,
   onTypeChange,
+  onDimChange,
   onDelete,
 }: {
   unit: LocalUnit;
   depth: number;
+  dimensions: DimensionOption[];
   onAdd: (parentId: string) => void;
   onRename: (id: string, name: string) => void;
   onTypeChange: (id: string, type: UnitType) => void;
+  onDimChange: (id: string, codes: string[] | null) => void;
   onDelete: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -129,6 +223,11 @@ function UnitRow({
           ))}
         </select>
 
+        {/* Dimension picker */}
+        {dimensions.length > 0 && (
+          <DimDropdown unit={unit} dimensions={dimensions} onChange={onDimChange} />
+        )}
+
         {/* Actions (shown on hover) */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <button
@@ -166,9 +265,11 @@ function UnitRow({
               key={child.id}
               unit={child}
               depth={depth + 1}
+              dimensions={dimensions}
               onAdd={onAdd}
               onRename={onRename}
               onTypeChange={onTypeChange}
+              onDimChange={onDimChange}
               onDelete={onDelete}
             />
           ))}
@@ -199,13 +300,20 @@ function typeInTree(units: LocalUnit[], id: string, type: UnitType): LocalUnit[]
   });
 }
 
+function dimInTree(units: LocalUnit[], id: string, codes: string[] | null): LocalUnit[] {
+  return units.map((u) => {
+    if (u.id === id) return { ...u, active_dimension_codes: codes };
+    return { ...u, children: dimInTree(u.children, id, codes) };
+  });
+}
+
 function deleteFromTree(units: LocalUnit[], id: string): LocalUnit[] {
   return units.filter((u) => u.id !== id).map((u) => ({ ...u, children: deleteFromTree(u.children, id) }));
 }
 
 export type { LocalUnit };
 
-export function HierarchyBuilder({ units, onChange }: Props) {
+export function HierarchyBuilder({ units, onChange, dimensions = [] }: Props) {
   function handleAdd(parentId: string | null) {
     const sibs = parentId
       ? (function find(list: LocalUnit[]): LocalUnit[] {
@@ -255,9 +363,11 @@ export function HierarchyBuilder({ units, onChange }: Props) {
               key={u.id}
               unit={u}
               depth={0}
+              dimensions={dimensions}
               onAdd={handleAdd}
               onRename={(id, name) => onChange(renameInTree(units, id, name))}
               onTypeChange={(id, type) => onChange(typeInTree(units, id, type))}
+              onDimChange={(id, codes) => onChange(dimInTree(units, id, codes))}
               onDelete={(id) => onChange(deleteFromTree(units, id))}
             />
           ))
@@ -265,7 +375,7 @@ export function HierarchyBuilder({ units, onChange }: Props) {
       </div>
 
       <p className="px-4 py-2 text-xs text-grey-400 border-t border-grey-100">
-        Double-click a name to rename · Click + to add a child unit
+        Double-click a name to rename · Click + to add a child unit · Use the dimensions dropdown to pick which dimensions each unit is assessed on
       </p>
     </div>
   );
