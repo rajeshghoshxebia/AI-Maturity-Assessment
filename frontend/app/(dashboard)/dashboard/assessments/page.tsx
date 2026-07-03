@@ -169,16 +169,16 @@ export default function AssessmentsPage() {
       )}
 
       {!loading && items.length > 0 && (
-        <div className="card p-0 overflow-hidden">
+        <div className="card p-0">
           {/* Desktop table */}
           <table className="hidden md:table w-full text-sm">
             <thead className="bg-grey-50 border-b border-grey-200">
               <tr>
-                <th className="text-left px-6 py-3 font-medium text-grey-600">Organisation</th>
+                <th className="text-left px-6 py-3 font-medium text-grey-600 rounded-tl-lg">Organisation</th>
                 <th className="text-left px-6 py-3 font-medium text-grey-600">Mode</th>
                 <th className="text-left px-6 py-3 font-medium text-grey-600">Status</th>
                 <th className="text-left px-6 py-3 font-medium text-grey-600">Created</th>
-                <th className="px-6 py-3 w-24" />
+                <th className="px-6 py-3 w-24 rounded-tr-lg" />
               </tr>
             </thead>
             <tbody className="divide-y divide-grey-100">
