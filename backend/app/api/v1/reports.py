@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import defaultdict
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -38,6 +39,10 @@ _MATURITY_GUIDANCE = {
 
 class GenerateReportRequest(BaseModel):
     include_recommendations: bool = True
+    # Optional consultant-supplied prompt/template. When provided it replaces the
+    # default report structure instructions; the scores, comments and other data
+    # context are always supplied to the model regardless.
+    custom_prompt: str | None = None
 
 
 class GenerateReportResponse(BaseModel):
@@ -102,17 +107,59 @@ async def generate_ai_report(
             "PRIORITY AREAS (lowest scoring): " + ", ".join(f"{d.dimension_name} ({d.score:.1f})" for d in worst),
         ]
 
-    prompt_parts += [
-        "",
-        "Write a structured report with these sections:",
-        "1. Executive Summary (2–3 paragraphs): overall maturity level, key strengths, strategic positioning",
-        "2. Detailed Dimension Analysis: for each dimension, one paragraph with interpretation and context",
-        "3. Key Strengths (bullet points)",
-        "4. Priority Recommendations (numbered, actionable, specific)",
-        "5. Closing Statement: forward-looking paragraph on the transformation journey",
-        "",
-        "Write in a professional, consulting tone. Be specific about this organisation — do not use generic filler text. Use the consultant context and notes to add real insight.",
-    ]
+    # Per-question detail: the individual scores and any consultant comments
+    # (observations) captured while conducting the assessment. This grounds the
+    # narrative in the actual evidence rather than dimension averages alone.
+    q_meta: dict = {}
+    for dim in dimensions:
+        for q in dim.questions:
+            q_meta[q.id] = (dim.name, q.text)
+
+    detail_by_dim: dict[str, list[str]] = defaultdict(list)
+    comment_lines: list[str] = []
+    for r in all_responses:
+        meta = q_meta.get(r.question_id)
+        if not meta:
+            continue
+        dim_nm, q_text = meta
+        line = f"    - [{r.score}/5] {q_text}"
+        if r.observations:
+            line += f"\n      Consultant comment: {r.observations}"
+            comment_lines.append(f"  - ({dim_nm}) {q_text}: {r.observations}")
+        detail_by_dim[dim_nm].append(line)
+
+    if detail_by_dim:
+        prompt_parts += ["", "DETAILED QUESTION RESPONSES (score out of 5, with consultant comments where given):"]
+        for dim_nm in sorted(detail_by_dim.keys()):
+            prompt_parts.append(f"  {dim_nm}:")
+            prompt_parts.extend(detail_by_dim[dim_nm])
+
+    if comment_lines:
+        prompt_parts += ["", "CONSULTANT COMMENTS (verbatim — weave these observations into the analysis):"]
+        prompt_parts.extend(comment_lines)
+
+    if body.custom_prompt and body.custom_prompt.strip():
+        # Consultant-driven format: their template/prompt controls the structure,
+        # while all the data above is still available for the model to draw on.
+        prompt_parts += [
+            "",
+            "REPORT INSTRUCTIONS (provided by the consultant — follow these exactly):",
+            body.custom_prompt.strip(),
+            "",
+            "Ground the report in the scores, question responses and consultant comments above. Be specific to this organisation — no generic filler.",
+        ]
+    else:
+        prompt_parts += [
+            "",
+            "Write a structured report with these sections:",
+            "1. Executive Summary (2–3 paragraphs): overall maturity level, key strengths, strategic positioning",
+            "2. Detailed Dimension Analysis: for each dimension, one paragraph with interpretation and context",
+            "3. Key Strengths (bullet points)",
+            "4. Priority Recommendations (numbered, actionable, specific)",
+            "5. Closing Statement: forward-looking paragraph on the transformation journey",
+            "",
+            "Write in a professional, consulting tone. Be specific about this organisation — do not use generic filler text. Use the consultant context, notes, question responses and comments to add real insight.",
+        ]
 
     prompt = "\n".join(prompt_parts)
 
@@ -125,8 +172,11 @@ async def generate_ai_report(
 
     try:
         import openai
-        client = openai.OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
+        # Async client + await: a synchronous call here would block the event
+        # loop for the whole (slow) completion, which makes the platform gateway
+        # time out and return a hard 502.
+        client = openai.AsyncOpenAI(api_key=api_key, timeout=120.0)
+        response = await client.chat.completions.create(
             model="gpt-4o",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -139,6 +189,6 @@ async def generate_ai_report(
             detail="openai package is not installed. Run: pip install openai",
         )
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"AI generation failed: {type(e).__name__}: {e}")
 
     return GenerateReportResponse(narrative=narrative, model_used=model_used)
