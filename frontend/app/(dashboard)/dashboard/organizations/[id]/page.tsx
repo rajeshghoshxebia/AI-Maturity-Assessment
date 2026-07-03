@@ -7,6 +7,7 @@ import { ChevronLeft, Edit2, Plus, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { HierarchyBuilder, type LocalUnit } from "@/components/organizations/HierarchyBuilder";
 import type { Organization, OrgUnit } from "@/types/organization";
+import type { Dimension } from "@/types/assessment";
 
 const INDUSTRIES = [
   "Technology", "Financial Services", "Healthcare", "Retail",
@@ -21,6 +22,7 @@ function toLocalUnit(u: OrgUnit): LocalUnit {
     unit_type: u.unit_type,
     sort_order: u.sort_order,
     competency_codes: u.competency_codes,
+    active_dimension_codes: u.active_dimension_codes,
     children: u.children.map(toLocalUnit),
   };
 }
@@ -40,6 +42,7 @@ async function syncUnits(orgId: string, next: LocalUnit[], prev: OrgUnit[]) {
           parent_id: parentId,
           sort_order: i,
           competency_codes: u.competency_codes,
+          active_dimension_codes: u.active_dimension_codes,
         });
         await processTree(u.children, created.id);
       } else {
@@ -49,6 +52,7 @@ async function syncUnits(orgId: string, next: LocalUnit[], prev: OrgUnit[]) {
           parent_id: parentId,
           sort_order: i,
           competency_codes: u.competency_codes,
+          active_dimension_codes: u.active_dimension_codes,
         });
         await processTree(u.children, u.id);
       }
@@ -79,6 +83,7 @@ export default function OrganizationDetailPage() {
   const [editName, setEditName] = useState("");
   const [editIndustry, setEditIndustry] = useState("");
   const [units, setUnits] = useState<LocalUnit[]>([]);
+  const [dimensions, setDimensions] = useState<{ code: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -92,6 +97,9 @@ export default function OrganizationDetailPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    api.get<Dimension[]>("/dimensions")
+      .then((dims) => setDimensions(dims.map((d) => ({ code: d.code, name: d.name }))))
+      .catch(() => {});
   }, [id]);
 
   async function saveDetails() {
@@ -229,7 +237,7 @@ export default function OrganizationDetailPage() {
       {/* Hierarchy */}
       <div className="card p-6 space-y-4">
         <h2 className="text-sm font-semibold text-grey-900">Organization Hierarchy</h2>
-        <HierarchyBuilder units={units} onChange={setUnits} />
+        <HierarchyBuilder units={units} onChange={setUnits} dimensions={dimensions} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-between items-center pt-1">
           <Link

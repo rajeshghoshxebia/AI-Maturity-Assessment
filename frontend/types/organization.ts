@@ -46,6 +46,7 @@ export interface OrgUnitCreate {
   parent_id?: string;
   sort_order?: number;
   competency_codes?: string[];
+  active_dimension_codes?: string[] | null;
 }
 
 export interface OrgUnitUpdate {
@@ -54,4 +55,5 @@ export interface OrgUnitUpdate {
   parent_id?: string | null;
   sort_order?: number;
   competency_codes?: string[];
+  active_dimension_codes?: string[] | null;
 }
