@@ -1,8 +1,14 @@
 from fastapi import APIRouter
 
-from app.api.v1 import assessments, dimensions, invitations, leads, organizations, questions, reports, responses, survey_public
+from app.api.v1 import (
+    assessments, auth, consultant_assignments, dimensions, invitations, leads,
+    organizations, questions, reports, responses, survey_public, users,
+)
 
 router = APIRouter()
+router.include_router(auth.router, prefix="/auth", tags=["auth"])
+router.include_router(users.router, prefix="/users", tags=["users"])
+router.include_router(consultant_assignments.router, prefix="/consultant-assignments", tags=["consultant-assignments"])
 router.include_router(dimensions.router, prefix="/dimensions", tags=["dimensions"])
 router.include_router(organizations.router, prefix="/organizations", tags=["organizations"])
 router.include_router(assessments.router, prefix="/assessments", tags=["assessments"])

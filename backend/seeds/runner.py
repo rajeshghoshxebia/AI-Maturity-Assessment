@@ -34,7 +34,7 @@ async def _seed_dev_tenant(session: AsyncSession) -> None:
             tenant_id=_DEV_TENANT_ID,
             email="dev@xebia.com",
             name="Dev User",
-            role=UserRole.CONSULTANT,
+            role=UserRole.ADMINISTRATOR,
         ))
         await session.flush()
 

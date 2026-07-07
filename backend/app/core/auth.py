@@ -9,8 +9,13 @@ import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwk, jwt
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.security import decode_access_token
+from app.core.tenant import apply_rls
+from app.db.session import get_db
 
 _bearer = HTTPBearer(auto_error=False)
 _jwks_cache: dict[str, Any] = {}
@@ -63,26 +68,47 @@ class CurrentUser:
         email: str,
         tenant_id: UUID,
         role: str,
+        org_scope: set[UUID] | None = None,
     ) -> None:
         self.user_id = user_id
         self.oid = oid
         self.email = email
         self.tenant_id = tenant_id
         self.role = role
+        # Set of organization ids the user may see; None = unrestricted (admin).
+        self.org_scope = org_scope
 
 
 def _dev_user() -> CurrentUser:
+    # Dev bypass acts as a full Administrator so local work is unhindered.
     return CurrentUser(
         user_id=_DEV_USER_ID,
         oid="dev-oid",
         email="dev@xebia.com",
         tenant_id=_DEV_TENANT_ID,
-        role="CONSULTANT",
+        role="ADMINISTRATOR",
+        org_scope=None,
+    )
+
+
+async def _load_and_scope(db: AsyncSession, user) -> CurrentUser:
+    """Build a CurrentUser from a DB user row, resolving its org scope."""
+    from app.core.permissions import resolve_org_scope
+
+    await apply_rls(db, user.tenant_id)
+    scope = await resolve_org_scope(
+        db, user_id=user.id, role=user.role.value,
+        primary_org_unit_id=user.primary_org_unit_id,
+    )
+    return CurrentUser(
+        user_id=user.id, oid=user.azure_oid or "", email=user.email,
+        tenant_id=user.tenant_id, role=user.role.value, org_scope=scope,
     )
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
     # ── Dev short-circuit: no Azure AD configured ──────────────────────────
     is_dev = settings.APP_ENV == "development" and not settings.AZURE_TENANT_ID
@@ -92,20 +118,39 @@ async def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    payload = await _decode_token(credentials.credentials)
+    from app.models.user import User
+
+    token = credentials.credentials
+
+    # ── Path 1: app-issued JWT (credential login) ──────────────────────────
+    app_payload = decode_access_token(token)
+    if app_payload is not None:
+        try:
+            user_id = UUID(app_payload["sub"])
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+        user = await db.get(User, user_id)
+        if user is None or not user.is_active:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account inactive or not found")
+        return await _load_and_scope(db, user)
+
+    # ── Path 2: Azure AD token → look up the real DB user ──────────────────
+    payload = await _decode_token(token)
     oid = payload.get("oid") or payload.get("sub", "")
     email = payload.get("preferred_username") or payload.get("email", "")
     tenant_id_str = payload.get("tid", "")
-    role = payload.get("extension_role", "CONSULTANT")
     try:
         tenant_id = UUID(tenant_id_str)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid tenant") from exc
 
-    return CurrentUser(
-        user_id=uuid.uuid4(),  # will be looked up from DB in production
-        oid=oid,
-        email=email,
-        tenant_id=tenant_id,
-        role=role,
+    await apply_rls(db, tenant_id)
+    result = await db.execute(
+        select(User).where(or_(User.azure_oid == oid, User.email == email))
     )
+    user = result.scalars().first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No matching user account")
+    if not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account inactive")
+    return await _load_and_scope(db, user)
