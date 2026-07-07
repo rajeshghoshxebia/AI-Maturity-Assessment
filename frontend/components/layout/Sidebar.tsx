@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Settings,
+  Target,
   Users,
   X,
 } from "lucide-react";
@@ -25,6 +26,7 @@ const nav = [
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardList },
   { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen },
+  { href: "/dashboard/leads", label: "Lead Search", icon: Target },
   { href: "/dashboard/users", label: "Users", icon: Users, disabled: true },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, disabled: true },
 ];
