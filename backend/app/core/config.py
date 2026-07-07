@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
 
+    # ── App-native auth (credential login) ─────────────────────────────────
+    # App JWTs are signed with SECRET_KEY; keep it stable in production.
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 12  # 12h session
+
+    # ── Lead search ────────────────────────────────────────────────────────
+    # Which B2B data provider to use for lead discovery/enrichment.
+    # Currently supported: "apollo". Adding a provider = one new adapter.
+    LEAD_PROVIDER: str = "apollo"
+    APOLLO_API_KEY: str = ""
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]

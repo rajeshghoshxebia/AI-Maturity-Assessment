@@ -62,6 +62,10 @@ async def list_assessments(
 ) -> list[AssessmentListOut]:
     repo, user = deps
     items = await repo.list_for_tenant(user.tenant_id)
+    # Org-scope visibility: non-admins see only assessments for organizations in
+    # their scope (standalone assessments with no org are admin-only).
+    if user.org_scope is not None:
+        items = [a for a in items if a.org_id in user.org_scope]
     return [AssessmentListOut.model_validate(a) for a in items]
 
 

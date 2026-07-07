@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user, CurrentUser
+from app.core.permissions import can_see_org
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.organization import Organization, OrgUnit
@@ -47,6 +48,8 @@ def _build_tree(units: list[OrgUnit]) -> list[OrgUnitOut]:
 
 async def _get_org(org_id: UUID, user: CurrentUser, db: AsyncSession) -> Organization:
     await apply_rls(db, user.tenant_id)
+    if not can_see_org(user, org_id):
+        raise HTTPException(status_code=404, detail="Organization not found")
     result = await db.execute(
         select(Organization)
         .where(Organization.id == org_id, Organization.tenant_id == user.tenant_id)
@@ -66,13 +69,19 @@ async def list_organizations(
     db: AsyncSession = Depends(get_db),
 ) -> list[OrganizationListOut]:
     await apply_rls(db, user.tenant_id)
-    result = await db.execute(
+    # Empty scope → no visible organizations; None scope → unrestricted (admin).
+    if user.org_scope is not None and not user.org_scope:
+        return []
+    stmt = (
         select(Organization, func.count(OrgUnit.id).label("unit_count"))
         .outerjoin(OrgUnit, OrgUnit.org_id == Organization.id)
         .where(Organization.tenant_id == user.tenant_id)
         .group_by(Organization.id)
         .order_by(Organization.name)
     )
+    if user.org_scope is not None:
+        stmt = stmt.where(Organization.id.in_(user.org_scope))
+    result = await db.execute(stmt)
     rows = result.all()
     return [
         OrganizationListOut(

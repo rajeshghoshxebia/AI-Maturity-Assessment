@@ -6,6 +6,7 @@ from app.models.organization import Organization, OrgUnit
 from app.models.assessment import Assessment, AssessmentMode, AssessmentStatus, AssessmentSubcategory
 from app.models.response import Response, SurveyAssignment
 from app.models.survey import SurveyInvitation
+from app.models.consultant_assignment import ConsultantAssignment
 
 __all__ = [
     "Tenant", "User", "UserRole",
@@ -15,4 +16,5 @@ __all__ = [
     "Assessment", "AssessmentMode", "AssessmentStatus", "AssessmentSubcategory",
     "Response", "SurveyAssignment",
     "SurveyInvitation",
+    "ConsultantAssignment",
 ]

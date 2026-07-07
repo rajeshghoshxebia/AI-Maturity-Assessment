@@ -19,6 +19,21 @@ const msalConfig = {
 
 const loginScopes = ["openid", "profile", "email"];
 
+// ── App-native credential session (username/password → app JWT) ──────────────
+const APP_TOKEN_KEY = "aima_app_token";
+
+export function setAppToken(token: string): void {
+  if (typeof window !== "undefined") localStorage.setItem(APP_TOKEN_KEY, token);
+}
+
+export function getAppToken(): string | null {
+  return typeof window !== "undefined" ? localStorage.getItem(APP_TOKEN_KEY) : null;
+}
+
+export function clearAppToken(): void {
+  if (typeof window !== "undefined") localStorage.removeItem(APP_TOKEN_KEY);
+}
+
 let _pca: PublicClientApplication | null = null;
 
 export function getMsalInstance(): PublicClientApplication {
@@ -47,6 +62,10 @@ export function getActiveAccount(): AccountInfo | null {
 }
 
 export async function getAccessToken(): Promise<string | null> {
+  // Prefer an app-native credential session when present.
+  const appToken = getAppToken();
+  if (appToken) return appToken;
+
   const pca = getMsalInstance();
   const account = getActiveAccount();
   if (!account) return null;
