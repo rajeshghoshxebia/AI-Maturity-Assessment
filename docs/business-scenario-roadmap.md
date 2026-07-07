@@ -18,8 +18,19 @@ This document reconciles the two. It is the agreed plan of record for turning th
 
 1. **Treat the docs as feature/business requirements for the real app.** Ignore the "LocalStorage / no-backend / simulated" implementation details — persistence is Postgres via FastAPI, and integrations become real (or explicitly stubbed) server-side.
 2. **This document first, code second.** No implementation until the roadmap is agreed.
-3. **Keep the current data model and maturity labels.** No Competency layer migration, no relabelling of maturity bands right now. Map terminology only (§4). Revisit per-feature if a feature genuinely requires it.
-4. **RBAC is Phase 1.** The role model + Assessment Consultant assignments come before the other feature areas, because most spec features gate on roles.
+3. **Keep the current data model (Dimension→Question, no Competency tier).** *Update (2026-07-07): adopt the spec's maturity levels* — Initial / Developing / Managed / Advanced / Optimized with the spec bands (§4). This supersedes the original "keep current labels" call.
+4. **RBAC is Phase 1**, and includes **Admin-created username/password users** (app-managed credentials layered on top of Azure AD identity). This supersedes the original "drop password rules" call.
+
+### Resolved open questions (2026-07-07)
+
+| # | Question | Decision |
+|---|---|---|
+| 1 | Evidence & report files | **Metadata only, no storage.** Generate a downloadable **Markdown (.md)** file on demand; do not persist files. |
+| 2 | Reminders / email | **Placeholder button only** — no sending, no records for now. |
+| 3 | Maturity labels | **Use the spec's levels** (Initial/Developing/Managed/Advanced/Optimized). |
+| 4 | Assessment Period shape | **Optional grouping**, toggled by the assessment creator (like the existing per-team toggle). Standalone assessments remain valid. |
+| 5 | Benchmarking | **Anonymised cross-tenant aggregation** (never expose client names). |
+| 6 | RBAC vs Azure AD | **Admin can create username + password** users now; roles app-managed. |
 
 ---
 
@@ -62,7 +73,7 @@ Each feature area (§5) is graded:
 | Competency | *(no table)* | **Decision: not adding.** App is Dimension→Question. `TechSubcategory` is a partial analog. Spec competencies map to dimension-level for now. |
 | Question | `Question` | Same. |
 | Rating statement (0–5 + description) | `CompetencyLevel` | App already stores per-question level descriptions. |
-| Maturity: Initial/Developing/Managed/Advanced/Optimized (0–5) | Planning/Experimenting/Standardizing/Scaling/Optimizing (1–5) | **Keep current labels.** Map in report copy only if needed. ⚠️ scale differs (0–5 vs 1–5). |
+| Maturity: Initial/Developing/Managed/Advanced/Optimized | Planning/Experimenting/Standardizing/Scaling/Optimizing | **Adopt spec labels + bands** (0.0–1.0 Initial, 1.1–2.5 Developing, 2.6–3.5 Managed, 3.6–4.5 Advanced, 4.6–5.0 Optimized). Our question scores are 1–5, so overall lands ~1–5; the Initial band is rarely reached but retained for completeness. Requires updating `maturity_label()` + report copy. |
 | Member (self-executes) | survey respondent / `SurveyInvitation` | Extend to full self-serve execution. |
 | Consultant Review | consultant scoring (+ AI summary) | Extend with independent ratings/insights + evidence/backlog sections. |
 | Evidence | *(new)* | **Build.** |
@@ -76,7 +87,7 @@ Each feature area (§5) is graded:
 - **Spec:** 7 roles (Administrator, Primary Contact Organization/BU/Team, Assessment Consultant, Member, Viewer); Person entity with role; consultant→org assignments; data visibility filtered by role; per-role navigation trees; username/password generation rules.
 - **Current:** Azure AD + tenant, dev UUIDs, no roles.
 - **Gap:** entire role model + permission service + row-level visibility + Assessment Consultant assignment table.
-- **Notes:** Username/password generation (spec §entity) is **not applicable** — we use Azure AD identities, not app-managed passwords. Model roles as a `role` column on user + a `consultant_assignments` table. Enforce visibility in repositories/RLS.
+- **Notes:** Model roles as a `role` column on user + a `consultant_assignments` table; enforce visibility in repositories/RLS. **Admin-managed credentials are in scope:** an Admin can create a Person with username + password (hashed), and login validates against app users in addition to Azure AD. Username auto-generation (firstname + lastname initial, with duplicate resolution) and default password `username@123` follow the spec.
 
 ### B. Navigation & workspace layout — 🔧 Adapt (Phase 2)
 - **Spec:** header + horizontal functional menu + left hierarchical tree + workspace; role-specific menus; dashboard counts by visibility; responsive (hamburger + collapsible tree).
@@ -91,7 +102,7 @@ Each feature area (§5) is graded:
 ### D. Assessment Periods — 🏗️ Build (Phase 4)
 - **Spec:** `AssessmentPeriod` (org, name, description, start/end, status Planned/In Progress/In Review/Done/Cancelled); list/search/filter; role-scoped create/edit.
 - **Current:** none (assessments are standalone).
-- **Gap:** new entity + screens; later becomes the parent of definitions/designs/assessments.
+- **Gap:** new entity + screens; becomes an **optional** parent of assessments. The assessment creator toggles "part of a period" (like the per-team toggle); standalone assessments still work.
 
 ### E. Assessment Administration (Definition) — 🔧 Adapt (Phase 4)
 - **Spec:** pick a period → select applicable Dimensions → select Competencies → save an `AssessmentDefinition` (+ details); status Draft/Ready/Published/Closed.
@@ -111,7 +122,7 @@ Each feature area (§5) is graded:
 ### H. Evidence management — 🏗️ Build (Phase 6)
 - **Spec:** consultant defines required evidences per dimension (AI-suggested checklist + custom + mandatory); client Primary Contacts provide evidence (PDF, simulated); status workflow; consultant reviews.
 - **Current:** none.
-- **Gap:** evidence-requirement + submission entities + screens. Real file storage decision needed (see §7).
+- **Gap:** evidence-requirement + submission entities (**metadata only, no file storage**). "Provide evidence" captures file name + type + notes; a **downloadable .md** summary can be generated on demand. No upload/persistence.
 
 ### I. Consultant Assessment Review — 🔧 Adapt (Phase 7)
 - **Spec:** consultant independent ratings vs member ratings; insights; evidence review; backlog review; leadership-alignment review; share → feedback → publish; PDF export with privacy controls.
@@ -121,12 +132,12 @@ Each feature area (§5) is graded:
 ### J. Reporting, benchmarking & publication — 🔧 Adapt (Phase 8)
 - **Spec:** scoring engine (question→competency→dimension→overall), executive summary, radar, heatmap, consultant recommendations, industry/overall benchmarking (anonymised), BU/team comparison, historical trends, publication workflow (Draft→…→Published), export dialog with content toggles, responsible-interpretation disclaimer.
 - **Current:** radar/bar, hierarchy tree, team comparison, AI summary, PDF/PPT export, level filter.
-- **Gap:** heatmap, benchmarking, historical trends, publication lifecycle, content-toggle export, disclaimer. ⚠️ Scoring uses dimension→overall (no competency mid-layer) — consistent with our kept model.
+- **Gap:** heatmap, **anonymised cross-tenant benchmarking**, historical trends, publication lifecycle, content-toggle export (adds a **downloadable .md** alongside PDF/PPT), disclaimer. Scoring stays dimension→overall (no competency mid-layer). Maturity labels switch to the spec set (§4).
 
 ### K. Assessment Tracking & Reminders (Monitoring) — 🏗️ Build (Phase 9)
 - **Spec:** monitoring dashboard (Planned/In Progress/Completed/Overdue), participant status grid, individual + bulk reminders (email now, Teams placeholder).
 - **Current:** invitations list with status; no monitoring dashboard or reminders.
-- **Gap:** monitoring screens + reminder sending (real email vs simulated — see §7).
+- **Gap:** monitoring screens + a **"Send Reminder" placeholder button** (no email, no records) for the first cut.
 
 ### L. Backlog sources / Organization Setup (evidence input) — ⏸️ Defer
 - **Spec:** Jira/Excel backlog sources (simulated), uploads, analysis-preparation placeholders; future AI correlation.
@@ -138,25 +149,29 @@ Each feature area (§5) is graded:
 
 Additive only — no destructive migration:
 
-- **Phase 1:** `users.role` (enum), `consultant_assignments` (person_id, organization_id, active). Org fields: add `org_code`, `geography` (optional).
-- **Phase 4:** `assessment_periods`; link `assessments.assessment_period_id` (nullable, backfilled later).
+- **Phase 1:** `users.role` (enum) + `username`/`password_hash` (Admin-created, nullable for Azure AD users); `consultant_assignments` (person_id, organization_id, active). Org fields: add `org_code`, `geography` (optional). Update `maturity_label()` to the spec bands.
+- **Phase 4:** `assessment_periods`; **optional** `assessments.assessment_period_id` (nullable — set only when the creator enables periodic assessment).
 - **Phase 4–5:** `assessment_definitions` + details (dimension/question selection per period); reuse `active_dimension_codes`.
-- **Phase 6:** `evidence_requirements`, `evidence_submissions`.
+- **Phase 6:** `evidence_requirements`, `evidence_submissions` — **metadata columns only** (file name/type/notes/status); no blob storage.
 - **Phase 7:** `consultant_reviews` (+ per-question consultant ratings/insights, evidence/backlog review fields).
-- **Phase 8:** `published_reports`, benchmarking aggregates, historical snapshots.
+- **Phase 8:** `published_reports`, benchmarking aggregates (anonymised), historical snapshots. Report/evidence **exports rendered as downloadable `.md`** (client-side), not stored.
 
 The **Competency tier is intentionally not added.** Spec "competency selection" collapses to dimension-level; spec "rating statements" already map to the existing `CompetencyLevel` rows on each question.
 
 ---
 
-## 7. Open questions / decisions still needed
+## 7. Resolved decisions
 
-1. **Evidence & report files:** the spec simulates uploads/PDF. For the real app, do we (a) store files in object storage (e.g. S3/Azure Blob) now, (b) store metadata only for now, or (c) defer evidence entirely? *(Affects Phase 6/7/8.)*
-2. **Reminders/email:** send real email (needs an email provider + templates) or keep simulated (store reminder records) for the first cut? *(Phase 9.)*
-3. **Maturity scale:** spec is 0–5 with different labels; we keep 1–5 + current labels. Confirm reports may show our labels even where a doc example shows theirs.
-4. **Assessment Period vs existing Assessment:** should the current `Assessment` become "an assessment within a period", or should Period be a lightweight grouping layer added above today's assessments? *(Phase 4 shape.)*
-5. **Benchmarking data:** industry benchmarks — real cross-tenant aggregation (privacy/anonymisation rules) or seeded demo benchmarks first? *(Phase 8.)*
-6. **RBAC vs Azure AD:** roles are app-managed on top of Azure AD identity (no app passwords). Confirm we drop the spec's username/password-generation rules.
+All six open questions were resolved on 2026-07-07 (see the table in §1):
+
+1. **Evidence & report files** — metadata only; downloadable **.md** on demand; no storage.
+2. **Reminders/email** — **placeholder button** only.
+3. **Maturity scale** — **adopt spec labels + bands** (Initial → Optimized).
+4. **Assessment Period** — **optional**, toggled by the assessment creator.
+5. **Benchmarking** — **anonymised cross-tenant aggregation**.
+6. **RBAC** — **Admin creates username/password** users; roles app-managed.
+
+No open decisions remain for Phase 1. Remaining detail (e.g. exact benchmarking aggregation windows) will be settled within their phase.
 
 ---
 
