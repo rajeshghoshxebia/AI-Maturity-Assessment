@@ -29,11 +29,11 @@ _DIM_NARRATIVE = {
 }
 
 _MATURITY_GUIDANCE = {
-    "Planning": "organisation is at the awareness/planning stage with limited AI implementation",
-    "Experimenting": "organisation is running isolated pilots and proofs-of-concept",
-    "Standardizing": "organisation is maturing processes and scaling successful experiments",
-    "Scaling": "organisation is operationalising AI broadly across the business",
-    "Optimizing": "organisation is continuously improving and innovating with AI at enterprise scale",
+    "Initial": "organisation is at the awareness stage with little or no AI implementation",
+    "Developing": "organisation is running isolated pilots and proofs-of-concept",
+    "Managed": "organisation is maturing processes and scaling successful experiments",
+    "Advanced": "organisation is operationalising AI broadly across the business",
+    "Optimized": "organisation is continuously improving and innovating with AI at enterprise scale",
 }
 
 

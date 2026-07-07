@@ -79,9 +79,9 @@
     @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
   }
 
-  .maturity-planning     { @apply bg-red-100 text-red-700; }
-  .maturity-experimenting { @apply bg-orange-100 text-orange-700; }
-  .maturity-standardizing { @apply bg-yellow-100 text-yellow-700; }
-  .maturity-scaling      { @apply bg-green-100 text-green-700; }
-  .maturity-optimizing   { @apply bg-velvet-subtle text-velvet; }
+  .maturity-initial     { @apply bg-red-100 text-red-700; }
+  .maturity-developing  { @apply bg-orange-100 text-orange-700; }
+  .maturity-managed     { @apply bg-yellow-100 text-yellow-700; }
+  .maturity-advanced    { @apply bg-green-100 text-green-700; }
+  .maturity-optimized   { @apply bg-velvet-subtle text-velvet; }
 }

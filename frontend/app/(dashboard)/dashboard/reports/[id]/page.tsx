@@ -17,11 +17,11 @@ import type { Assessment, ScoreOut, HierarchyScoreOut, UnitScoreOut, GenerateRep
 
 const VELVET = "#831B84";
 const MATURITY_COLORS: Record<string, string> = {
-  Planning: "#94a3b8",
-  Experimenting: "#60a5fa",
-  Standardizing: "#34d399",
-  Scaling: "#a78bfa",
-  Optimizing: "#831B84",
+  Initial: "#94a3b8",
+  Developing: "#60a5fa",
+  Managed: "#34d399",
+  Advanced: "#a78bfa",
+  Optimized: "#831B84",
 };
 
 const DIM_NARRATIVE: Record<string, string> = {
