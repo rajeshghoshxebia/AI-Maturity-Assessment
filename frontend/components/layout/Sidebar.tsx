@@ -13,11 +13,12 @@ import {
   Menu,
   Settings,
   Target,
+  UserCog,
   Users,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { signOut } from "@/lib/auth";
+import { signOut, clearAppToken } from "@/lib/auth";
 import { useState, useEffect } from "react";
 import { useSidebar } from "./sidebar-context";
 
@@ -27,9 +28,20 @@ const nav = [
   { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardList },
   { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen },
   { href: "/dashboard/leads", label: "Lead Search", icon: Target },
-  { href: "/dashboard/users", label: "Users", icon: Users, disabled: true },
+  { href: "/dashboard/users", label: "Users", icon: Users },
+  { href: "/dashboard/consultants", label: "Consultant Access", icon: UserCog },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, disabled: true },
 ];
+
+async function handleSignOut() {
+  clearAppToken();
+  try {
+    await signOut();
+  } catch {
+    /* app-token session or dev mode — nothing to sign out of via MSAL */
+  }
+  if (typeof window !== "undefined") window.location.href = "/login";
+}
 
 export function Sidebar() {
   const path = usePathname();
@@ -145,7 +157,7 @@ export function Sidebar() {
         {/* Sign out */}
         <div className="px-2 pb-4 border-t border-white/10 pt-4">
           <button
-            onClick={() => signOut()}
+            onClick={() => handleSignOut()}
             className={cn(
               "flex w-full items-center rounded-md py-2.5 text-sm text-white/60 hover:bg-white/10 hover:text-white transition-colors",
               collapsed ? "md:justify-center px-0" : "gap-3 px-3",

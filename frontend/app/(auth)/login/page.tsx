@@ -2,14 +2,44 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "@/lib/auth";
+import { signIn, setAppToken } from "@/lib/auth";
+import { api } from "@/lib/api-client";
 
 const IS_DEV = !process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
+
+interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  role: string;
+  name: string | null;
+  user_id: string;
+}
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [credLoading, setCredLoading] = useState(false);
+
+  async function handleCredentialLogin(e: React.FormEvent) {
+    e.preventDefault();
+    if (!username.trim() || !password) return;
+    setCredLoading(true);
+    setError(null);
+    try {
+      const res = await api.post<TokenResponse>("/auth/login", {
+        username: username.trim(),
+        password,
+      });
+      setAppToken(res.access_token);
+      router.push("/dashboard");
+    } catch {
+      setError("Invalid username or password.");
+      setCredLoading(false);
+    }
+  }
 
   async function handleSignIn() {
     setLoading(true);
@@ -84,6 +114,40 @@ export default function LoginPage() {
               </>
             )}
           </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-grey-200" />
+            <span className="text-xs text-grey-400 uppercase tracking-wide">or</span>
+            <div className="h-px flex-1 bg-grey-200" />
+          </div>
+
+          {/* Credential login (Admin-managed accounts) */}
+          <form onSubmit={handleCredentialLogin} className="space-y-3">
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              autoComplete="username"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+              className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+            />
+            <button
+              type="submit"
+              disabled={credLoading || !username.trim() || !password}
+              className="w-full rounded-md border border-velvet px-4 py-2.5 text-sm font-medium text-velvet hover:bg-velvet-subtle transition-colors disabled:opacity-60"
+            >
+              {credLoading ? "Signing in…" : "Sign in with username"}
+            </button>
+          </form>
         </div>
 
         <p className="text-center text-white/30 text-xs mt-6">
