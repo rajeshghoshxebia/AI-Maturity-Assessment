@@ -3,12 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
-MATURITY_BANDS: list[tuple[float, float, str]] = [
-    (1.0, 1.9, "Planning"),
-    (2.0, 2.9, "Experimenting"),
-    (3.0, 3.4, "Standardizing"),
-    (3.5, 4.2, "Scaling"),
-    (4.3, 5.0, "Optimizing"),
+# Maturity bands as contiguous upper-inclusive thresholds (spec scale).
+# A score is labelled by the first band whose upper bound it does not exceed.
+MATURITY_BANDS: list[tuple[float, str]] = [
+    (1.0, "Initial"),
+    (2.5, "Developing"),
+    (3.5, "Managed"),
+    (4.5, "Advanced"),
+    (5.0, "Optimized"),
 ]
 
 
@@ -22,10 +24,10 @@ class DimensionScore:
 
 
 def maturity_label(score: float) -> str:
-    for low, high, label in MATURITY_BANDS:
-        if low <= score <= high:
+    for upper, label in MATURITY_BANDS:
+        if score <= upper:
             return label
-    return "Planning"
+    return "Optimized"
 
 
 def compute_dimension_score(

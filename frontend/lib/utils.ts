@@ -7,13 +7,13 @@ export function cn(...inputs: ClassValue[]) {
 
 export function maturityBadgeClass(label: string): string {
   const map: Record<string, string> = {
-    Planning: "maturity-planning",
-    Experimenting: "maturity-experimenting",
-    Standardizing: "maturity-standardizing",
-    Scaling: "maturity-scaling",
-    Optimizing: "maturity-optimizing",
+    Initial: "maturity-initial",
+    Developing: "maturity-developing",
+    Managed: "maturity-managed",
+    Advanced: "maturity-advanced",
+    Optimized: "maturity-optimized",
   };
-  return map[label] ?? "maturity-planning";
+  return map[label] ?? "maturity-initial";
 }
 
 export function formatScore(score: number): string {
