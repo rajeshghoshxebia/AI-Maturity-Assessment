@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.auth import get_current_user, CurrentUser
+from app.core.auth import CurrentUser
+from app.core.permissions import ADMIN, require_roles
 from app.db.session import get_db
 from app.models.question import Question, CompetencyLevel
 from app.schemas.dimension import QuestionOut
@@ -28,7 +29,7 @@ class QuestionUpdate(BaseModel):
 async def update_question(
     question_id: UUID,
     body: QuestionUpdate,
-    _: CurrentUser = Depends(get_current_user),
+    _: CurrentUser = Depends(require_roles(ADMIN)),
     db: AsyncSession = Depends(get_db),
 ) -> QuestionOut:
     stmt = (

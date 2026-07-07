@@ -117,6 +117,8 @@ export default function ReportPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [useCustomPrompt, setUseCustomPrompt] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");
+  // Report download is gated on a mandatory human review/edit of the summary.
+  const [reviewed, setReviewed] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -150,6 +152,7 @@ export default function ReportPage() {
         custom_prompt: useCustomPrompt && customPrompt.trim() ? customPrompt.trim() : undefined,
       });
       setAiNarrative(result.narrative);
+      setReviewed(false); // fresh AI output must be reviewed again before download
     } catch (e: any) {
       setAiError(e?.message ?? "Failed to generate narrative. Check that OPENAI_API_KEY is configured on the backend.");
     } finally {
@@ -158,7 +161,7 @@ export default function ReportPage() {
   }
 
   async function exportPdf() {
-    if (!reportRef.current) return;
+    if (!reportRef.current || !reviewed) return;
     setExporting(true);
     try {
       const { default: jsPDF } = await import("jspdf");
@@ -174,7 +177,7 @@ export default function ReportPage() {
   }
 
   async function exportPpt() {
-    if (!rep || !assessment) return;
+    if (!rep || !assessment || !reviewed) return;
     const score = rep;
     setExporting(true);
     try {
@@ -324,20 +327,27 @@ export default function ReportPage() {
           )}
           <button
             onClick={exportPdf}
-            disabled={exporting}
-            className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors disabled:opacity-50"
+            disabled={exporting || !reviewed}
+            title={!reviewed ? "Review and confirm the summary before downloading" : undefined}
+            className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileText className="h-4 w-4" /> {exporting ? "Exporting…" : "PDF"}
           </button>
           <button
             onClick={exportPpt}
-            disabled={exporting}
-            className="inline-flex items-center gap-2 rounded-md bg-velvet px-3 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50"
+            disabled={exporting || !reviewed}
+            title={!reviewed ? "Review and confirm the summary before downloading" : undefined}
+            className="inline-flex items-center gap-2 rounded-md bg-velvet px-3 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Presentation className="h-4 w-4" /> {exporting ? "Exporting…" : "PPT"}
           </button>
         </div>
       </div>
+      {!reviewed && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+          Downloads are locked until the AI-generated summary has been reviewed and confirmed by a human below.
+        </div>
+      )}
 
       {/* Printable body */}
       <div ref={reportRef} className="space-y-6 bg-white">
@@ -426,12 +436,30 @@ export default function ReportPage() {
             <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{aiError}</div>
           )}
           {aiNarrative ? (
-            <div className="prose prose-sm max-w-none text-grey-700 whitespace-pre-wrap leading-relaxed text-sm">{aiNarrative}</div>
+            <div className="space-y-3">
+              <textarea
+                value={aiNarrative}
+                onChange={(e) => { setAiNarrative(e.target.value); setReviewed(false); }}
+                rows={16}
+                className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm leading-relaxed text-grey-800 resize-y focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+              />
+              <label className="flex items-start gap-2.5 rounded-md bg-grey-50 border border-grey-200 px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reviewed}
+                  onChange={(e) => setReviewed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-velvet"
+                />
+                <span className="text-sm text-grey-700">
+                  I have <strong>reviewed and edited</strong> this AI-generated summary and confirm it is accurate. Downloads unlock once this is checked.
+                </span>
+              </label>
+            </div>
           ) : (
             !aiError && (
               <p className="text-sm text-grey-400 italic">
                 Click "Generate summary" to create a curated summary based on the assessment scores, individual question responses and consultant comments
-                {assessment.org_context ? ", organisation context" : ""}{assessment.notes ? ", and consultant notes" : ""}.
+                {assessment.org_context ? ", organisation context" : ""}{assessment.notes ? ", and consultant notes" : ""}. A human review is required before the report can be downloaded.
               </p>
             )
           )}

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user, CurrentUser
+from app.core.permissions import can_see_org
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.repositories.assessment import AssessmentRepository
@@ -61,7 +62,7 @@ async def generate_ai_report(
 
     repo = AssessmentRepository(db)
     assessment = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not assessment:
+    if not assessment or not can_see_org(user, assessment.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
 
     dim_repo = DimensionRepository(db)

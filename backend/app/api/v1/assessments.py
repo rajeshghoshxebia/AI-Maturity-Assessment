@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user, CurrentUser
+from app.core.permissions import ADMIN, can_see_org, require_roles
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.assessment import Assessment, AssessmentStatus
@@ -113,7 +114,7 @@ async def get_assessment(
 ) -> AssessmentOut:
     repo, user = deps
     obj = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not obj:
+    if not obj or not can_see_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
     return _to_out(obj)
 
@@ -127,7 +128,7 @@ async def update_assessment(
 ) -> AssessmentOut:
     repo, user = deps
     obj = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not obj:
+    if not obj or not can_see_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
 
     for field, value in body.model_dump(exclude_unset=True, exclude={"active_subcategory_codes"}).items():
@@ -155,7 +156,7 @@ async def delete_assessment(
 ) -> None:
     repo, user = deps
     obj = await repo.get(assessment_id)
-    if not obj or obj.tenant_id != user.tenant_id:
+    if not obj or obj.tenant_id != user.tenant_id or not can_see_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
     await repo.delete(obj)
     await db.commit()
