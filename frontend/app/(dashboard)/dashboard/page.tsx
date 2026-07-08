@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ChevronDown, ChevronUp, ClipboardList, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronUp, ClipboardList, Lock, Pencil, TrendingUp, Users } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useMe, canEditOrg } from "@/lib/use-me";
 import type { AssessmentMode, AssessmentStatus } from "@/types/assessment";
 
 interface AssessmentListItem {
@@ -12,6 +13,7 @@ interface AssessmentListItem {
   mode: AssessmentMode;
   status: AssessmentStatus;
   created_at: string;
+  org_id: string | null;
 }
 
 const STATUS_STYLE: Record<AssessmentStatus, string> = {
@@ -47,6 +49,7 @@ function CollapsibleSection({
 
 export default function DashboardPage() {
   const [items, setItems] = useState<AssessmentListItem[]>([]);
+  const me = useMe();
 
   useEffect(() => {
     api.get<AssessmentListItem[]>("/assessments").then(setItems).catch(() => {});
@@ -54,6 +57,7 @@ export default function DashboardPage() {
 
   const active = items.filter((a) => a.status === "IN_PROGRESS" || a.status === "DRAFT").length;
   const completed = items.filter((a) => a.status === "COMPLETED").length;
+  const doneItems = items.filter((a) => a.status === "COMPLETED");
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -116,6 +120,35 @@ export default function DashboardPage() {
                 </span>
               </Link>
             ))}
+          </div>
+        )}
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Completed Assessments">
+        {doneItems.length === 0 ? (
+          <div className="px-4 py-10 text-center text-grey-400 text-sm">No completed assessments yet.</div>
+        ) : (
+          <div className="divide-y divide-grey-100">
+            {doneItems.map((a) => {
+              const editable = canEditOrg(me, a.org_id);
+              return (
+                <Link
+                  key={a.id}
+                  href={`/dashboard/assessments/${a.id}`}
+                  className="flex items-center justify-between px-4 py-3.5 hover:bg-grey-50 transition-colors md:px-6"
+                >
+                  <div className="min-w-0 flex-1 mr-3">
+                    <p className="text-sm font-medium text-grey-900 truncate">{a.organization_name}</p>
+                    <p className="text-xs text-grey-500 mt-0.5">
+                      {a.mode.toLowerCase()} · {new Date(a.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${editable ? "bg-velvet-subtle text-velvet" : "bg-grey-100 text-grey-500"}`}>
+                    {editable ? <><Pencil className="h-3 w-3" /> Editable</> : <><Lock className="h-3 w-3" /> View only</>}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         )}
       </CollapsibleSection>

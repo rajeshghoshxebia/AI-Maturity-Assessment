@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user, CurrentUser
-from app.core.permissions import ADMIN, can_see_org, require_roles
+from app.core.permissions import ADMIN, CONSULTANT, can_edit_org, can_view_org, require_roles
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.assessment import Assessment, AssessmentStatus
@@ -63,9 +63,9 @@ async def list_assessments(
 ) -> list[AssessmentListOut]:
     repo, user = deps
     items = await repo.list_for_tenant(user.tenant_id)
-    # Org-scope visibility: non-admins see only assessments for organizations in
-    # their scope (standalone assessments with no org are admin-only).
-    if user.org_scope is not None:
+    # Admins and consultants can view all assessments (consultants edit only
+    # their assigned ones). Other scoped roles see only their organizations'.
+    if user.org_scope is not None and user.role != CONSULTANT:
         items = [a for a in items if a.org_id in user.org_scope]
     return [AssessmentListOut.model_validate(a) for a in items]
 
@@ -114,7 +114,7 @@ async def get_assessment(
 ) -> AssessmentOut:
     repo, user = deps
     obj = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not obj or not can_see_org(user, obj.org_id):
+    if not obj or not can_view_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
     return _to_out(obj)
 
@@ -128,8 +128,10 @@ async def update_assessment(
 ) -> AssessmentOut:
     repo, user = deps
     obj = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not obj or not can_see_org(user, obj.org_id):
+    if not obj or not can_view_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
+    if not can_edit_org(user, obj.org_id):
+        raise HTTPException(status_code=403, detail="You can only edit assessments for your assigned organizations")
 
     for field, value in body.model_dump(exclude_unset=True, exclude={"active_subcategory_codes"}).items():
         setattr(obj, field, value)
@@ -156,7 +158,9 @@ async def delete_assessment(
 ) -> None:
     repo, user = deps
     obj = await repo.get(assessment_id)
-    if not obj or obj.tenant_id != user.tenant_id or not can_see_org(user, obj.org_id):
+    if not obj or obj.tenant_id != user.tenant_id or not can_view_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
+    if not can_edit_org(user, obj.org_id):
+        raise HTTPException(status_code=403, detail="You can only delete assessments for your assigned organizations")
     await repo.delete(obj)
     await db.commit()

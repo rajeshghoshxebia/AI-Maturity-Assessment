@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, ChevronRight, Edit2, MoreHorizontal, Plus, Trash2, X, Check } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useMe, canEditOrg } from "@/lib/use-me";
 import type { AssessmentMode, AssessmentStatus } from "@/types/assessment";
 
 interface AssessmentListItem {
@@ -12,6 +13,7 @@ interface AssessmentListItem {
   mode: AssessmentMode;
   status: AssessmentStatus;
   created_at: string;
+  org_id: string | null;
 }
 
 const STATUS_STYLE: Record<AssessmentStatus, string> = {
@@ -106,6 +108,7 @@ export default function AssessmentsPage() {
   const [items, setItems] = useState<AssessmentListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const me = useMe();
 
   useEffect(() => {
     api.get<AssessmentListItem[]>("/assessments")
@@ -202,7 +205,7 @@ export default function AssessmentsPage() {
                       >
                         Open <ChevronRight className="h-3 w-3" />
                       </Link>
-                      <ActionsMenu item={a} onDelete={handleDelete} onStatusChange={handleStatusChange} />
+                      {canEditOrg(me, a.org_id) && <ActionsMenu item={a} onDelete={handleDelete} onStatusChange={handleStatusChange} />}
                     </div>
                   </td>
                 </tr>

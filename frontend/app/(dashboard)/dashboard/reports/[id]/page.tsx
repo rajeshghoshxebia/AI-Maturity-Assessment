@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
+import { useMe, canEditOrg } from "@/lib/use-me";
 import type { Assessment, ScoreOut, HierarchyScoreOut, UnitScoreOut, GenerateReportResponse } from "@/types/assessment";
 
 const VELVET = "#831B84";
@@ -134,6 +135,7 @@ export default function ReportPage() {
   // Report download is gated on a mandatory human review/edit of the summary.
   const [reviewed, setReviewed] = useState(false);
   const [benchmark, setBenchmark] = useState<BenchmarkResponse | null>(null);
+  const me = useMe();
 
   useEffect(() => {
     Promise.all([
@@ -160,6 +162,7 @@ export default function ReportPage() {
     : score;
 
   async function generateAINarrative() {
+    if (!editable) return;
     setGeneratingAI(true);
     setAiError(null);
     try {
@@ -176,8 +179,10 @@ export default function ReportPage() {
     }
   }
 
+  const editable = canEditOrg(me, assessment?.org_id);
+
   async function exportPdf() {
-    if (!reportRef.current || !reviewed) return;
+    if (!reportRef.current || !reviewed || !editable) return;
     setExporting(true);
     try {
       const { default: jsPDF } = await import("jspdf");
@@ -193,7 +198,7 @@ export default function ReportPage() {
   }
 
   async function exportPpt() {
-    if (!rep || !assessment || !reviewed) return;
+    if (!rep || !assessment || !reviewed || !editable) return;
     const score = rep;
     setExporting(true);
     try {
@@ -366,23 +371,27 @@ export default function ReportPage() {
           )}
           <button
             onClick={exportPdf}
-            disabled={exporting || !reviewed}
-            title={!reviewed ? "Review and confirm the summary before downloading" : undefined}
+            disabled={exporting || !reviewed || !editable}
+            title={!editable ? "Only assigned consultants can download this report" : !reviewed ? "Review and confirm the summary before downloading" : undefined}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileText className="h-4 w-4" /> {exporting ? "Exporting…" : "PDF"}
           </button>
           <button
             onClick={exportPpt}
-            disabled={exporting || !reviewed}
-            title={!reviewed ? "Review and confirm the summary before downloading" : undefined}
+            disabled={exporting || !reviewed || !editable}
+            title={!editable ? "Only assigned consultants can download this report" : !reviewed ? "Review and confirm the summary before downloading" : undefined}
             className="inline-flex items-center gap-2 rounded-md bg-velvet px-3 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Presentation className="h-4 w-4" /> {exporting ? "Exporting…" : "PPT"}
           </button>
         </div>
       </div>
-      {!reviewed && (
+      {!editable ? (
+        <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-800">
+          View-only — this report belongs to an organization you are not assigned to. Summary generation and downloads are disabled.
+        </div>
+      ) : !reviewed && (
         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
           Downloads are locked until the AI-generated summary has been reviewed and confirmed by a human below.
         </div>
@@ -436,8 +445,9 @@ export default function ReportPage() {
             </div>
             <button
               onClick={generateAINarrative}
-              disabled={generatingAI}
-              className="inline-flex items-center gap-1.5 rounded-md bg-velvet px-3 py-1.5 text-xs font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-60"
+              disabled={generatingAI || !editable}
+              title={!editable ? "Only assigned consultants can generate the summary" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md bg-velvet px-3 py-1.5 text-xs font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {generatingAI ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…</> : <><Sparkles className="h-3.5 w-3.5" /> {aiNarrative ? "Regenerate" : "Generate summary"}</>}
             </button>

@@ -7,14 +7,16 @@ from app.models.assessment import Assessment, AssessmentMode, AssessmentStatus, 
 from app.models.response import Response, SurveyAssignment
 from app.models.survey import SurveyInvitation
 from app.models.consultant_assignment import ConsultantAssignment
+from app.models.question_version import QuestionVersion
 
 __all__ = [
     "Tenant", "User", "UserRole",
     "Dimension", "TechSubcategory",
-    "Question", "CompetencyLevel",
+    "Question", "CompetencyLevel", "QuestionVersion",
     "Organization", "OrgUnit",
     "Assessment", "AssessmentMode", "AssessmentStatus", "AssessmentSubcategory",
     "Response", "SurveyAssignment",
     "SurveyInvitation",
     "ConsultantAssignment",
+    "QuestionVersion",
 ]
