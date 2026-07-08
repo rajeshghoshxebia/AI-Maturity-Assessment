@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Pencil, Check, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil, Check, X, History } from "lucide-react";
 import { api } from "@/lib/api-client";
 import type { Dimension, Question, CompetencyLevel } from "@/types/assessment";
 
@@ -11,6 +11,14 @@ interface EditState {
   levels: CompetencyLevel[];
 }
 
+interface QuestionVersion {
+  id: string;
+  text: string;
+  levels: { level: number; description: string }[] | null;
+  edited_by_label: string | null;
+  created_at: string;
+}
+
 export default function QuestionsPage() {
   const [dimensions, setDimensions] = useState<Dimension[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +26,23 @@ export default function QuestionsPage() {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<QuestionVersion[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  async function toggleHistory(qid: string) {
+    if (historyId === qid) { setHistoryId(null); return; }
+    setHistoryId(qid);
+    setHistoryLoading(true);
+    setVersions([]);
+    try {
+      setVersions(await api.get<QuestionVersion[]>(`/questions/${qid}/versions`));
+    } catch {
+      setVersions([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   useEffect(() => {
     api.get<Dimension[]>("/dimensions")
@@ -110,13 +135,22 @@ export default function QuestionsPage() {
                             )}
                           </div>
                           {!isEditing && (
-                            <button
-                              onClick={() => startEdit(q)}
-                              className="shrink-0 p-1.5 rounded-md text-grey-400 hover:text-velvet hover:bg-velvet-subtle transition-colors"
-                              title="Edit question"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => toggleHistory(q.id)}
+                                className={`p-1.5 rounded-md transition-colors ${historyId === q.id ? "text-velvet bg-velvet-subtle" : "text-grey-400 hover:text-velvet hover:bg-velvet-subtle"}`}
+                                title="Version history"
+                              >
+                                <History className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => startEdit(q)}
+                                className="p-1.5 rounded-md text-grey-400 hover:text-velvet hover:bg-velvet-subtle transition-colors"
+                                title="Edit question"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           )}
                         </div>
 
@@ -142,6 +176,30 @@ export default function QuestionsPage() {
                             </div>
                           ))}
                         </div>
+
+                        {/* Version history */}
+                        {historyId === q.id && !isEditing && (
+                          <div className="ml-8 mt-3 rounded-md border border-grey-200 bg-grey-50 p-3">
+                            <p className="text-xs font-medium text-grey-500 uppercase tracking-wide mb-2">Version history</p>
+                            {historyLoading ? (
+                              <p className="text-xs text-grey-400">Loading…</p>
+                            ) : versions.length === 0 ? (
+                              <p className="text-xs text-grey-400">No edits recorded yet.</p>
+                            ) : (
+                              <ul className="space-y-2">
+                                {versions.map((v) => (
+                                  <li key={v.id} className="text-xs text-grey-600 border-l-2 border-grey-200 pl-3">
+                                    <span className="font-medium text-grey-700">
+                                      {new Date(v.created_at).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                                    </span>
+                                    {" · "}{v.edited_by_label ?? "unknown"}
+                                    <p className="text-grey-500 mt-0.5 line-clamp-2">{v.text}</p>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        )}
 
                         {/* Edit action buttons */}
                         {isEditing && (

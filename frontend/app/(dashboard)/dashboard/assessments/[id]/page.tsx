@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { maturityBadgeClass, formatScore } from "@/lib/utils";
+import { useMe, canEditOrg } from "@/lib/use-me";
 import type { Assessment, Dimension, ResponseOut, ScoreOut, ResponseUpsert } from "@/types/assessment";
 import type { Organization, OrgUnit } from "@/types/organization";
 
@@ -325,6 +326,7 @@ export default function AssessmentDetailPage() {
   const [pending, setPending] = useState<Record<string, { score: number; observations: string }>>({});
 
   const [editOpen, setEditOpen] = useState(false);
+  const me = useMe();
 
   // Per-team state
   const [org, setOrg] = useState<Organization | null>(null);
@@ -460,8 +462,16 @@ export default function AssessmentDetailPage() {
   if (loading) return <div className="flex items-center justify-center h-64 text-grey-400">Loading assessment…</div>;
   if (!assessment) return <div className="text-grey-500">Assessment not found.</div>;
 
+  // Editable only for assigned organizations (admins can edit anything).
+  const editable = canEditOrg(me, assessment.org_id);
+
   return (
     <div className="space-y-6 animate-fade-in">
+      {!editable && (
+        <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-800">
+          View-only — this assessment belongs to an organization you are not assigned to. You can review scores and the report, but not edit or conduct it.
+        </div>
+      )}
       {/* Dim config modal */}
       {dimPickerUnit && (
         <DimPickerModal
@@ -496,22 +506,26 @@ export default function AssessmentDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setEditOpen(true)}
-            title="Edit assessment"
-            className="inline-flex items-center gap-1.5 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
-          >
-            <Edit2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Edit</span>
-          </button>
-          <button
-            onClick={deleteAssessment}
-            title="Delete assessment"
-            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Delete</span>
-          </button>
+          {editable && (
+            <>
+              <button
+                onClick={() => setEditOpen(true)}
+                title="Edit assessment"
+                className="inline-flex items-center gap-1.5 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
+              >
+                <Edit2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Edit</span>
+              </button>
+              <button
+                onClick={deleteAssessment}
+                title="Delete assessment"
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            </>
+          )}
           <Link
             href={`/dashboard/reports/${id}`}
             className="inline-flex items-center gap-2 rounded-md border border-grey-200 px-3 py-2 text-sm font-medium text-grey-700 hover:bg-grey-50 transition-colors"
@@ -519,7 +533,7 @@ export default function AssessmentDetailPage() {
             <BarChart2 className="h-4 w-4" />
             <span className="hidden sm:inline">Report</span>
           </Link>
-          {Object.keys(pending).length > 0 && (
+          {editable && Object.keys(pending).length > 0 && (
             <button onClick={saveResponses} disabled={saving} className="rounded-md bg-velvet px-4 py-2 text-sm font-medium text-white hover:bg-velvet-dark transition-colors disabled:opacity-50">
               {saving ? "Saving…" : `Save ${Object.keys(pending).length}`}
             </button>
@@ -559,7 +573,7 @@ export default function AssessmentDetailPage() {
                       </span>
                     )}
                   </button>
-                  {isSelected && (
+                  {isSelected && editable && (
                     <button
                       onClick={() => setDimPickerUnit(u)}
                       title="Configure dimensions for this team"
@@ -670,11 +684,12 @@ export default function AssessmentDetailPage() {
                             return (
                               <button
                                 key={lvl}
-                                onClick={() => setQuestionScore(q.id, lvl)}
+                                onClick={() => editable && setQuestionScore(q.id, lvl)}
+                                disabled={!editable}
                                 title={level?.description}
                                 className={`group relative flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all ${
                                   selected ? "border-velvet bg-velvet text-white" : "border-grey-200 text-grey-500 hover:border-velvet hover:text-velvet"
-                                }`}
+                                } ${!editable ? "opacity-60 cursor-not-allowed hover:border-grey-200 hover:text-grey-500" : ""}`}
                               >
                                 {lvl}
                                 {level && (
@@ -697,8 +712,9 @@ export default function AssessmentDetailPage() {
                             rows={2}
                             value={currentObs}
                             onChange={(e) => setObservation(q.id, e.target.value)}
+                            readOnly={!editable}
                             placeholder="Observations / evidence (optional)"
-                            className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400"
+                            className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400 read-only:bg-grey-50"
                           />
                         )}
                       </div>
@@ -717,7 +733,7 @@ export default function AssessmentDetailPage() {
         )}
       </div>
 
-      {Object.keys(pending).length > 0 && (
+      {editable && Object.keys(pending).length > 0 && (
         <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:w-auto">
           <button
             onClick={saveResponses}

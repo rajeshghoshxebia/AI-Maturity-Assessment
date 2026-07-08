@@ -18,8 +18,16 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { signOut, clearAppToken } from "@/lib/auth";
+import { useMe } from "@/lib/use-me";
 import { useState, useEffect } from "react";
 import { useSidebar } from "./sidebar-context";
+
+// Assessment Consultants get a limited workspace.
+const CONSULTANT_HREFS = new Set([
+  "/dashboard",
+  "/dashboard/assessments",
+  "/dashboard/questions",
+]);
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -45,6 +53,11 @@ export function Sidebar() {
   const path = usePathname();
   const { collapsed, toggle } = useSidebar();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const me = useMe();
+
+  const visibleNav = me?.role === "ASSESSMENT_CONSULTANT"
+    ? nav.filter((n) => CONSULTANT_HREFS.has(n.href))
+    : nav;
 
   useEffect(() => { setMobileOpen(false); }, [path]);
 
@@ -115,7 +128,7 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-          {nav.map(({ href, label, icon: Icon, disabled }) => {
+          {visibleNav.map(({ href, label, icon: Icon, disabled }) => {
             const active = path === href || path.startsWith(href + "/");
             const baseClass = cn(
               "flex items-center rounded-md py-2.5 text-sm transition-colors",

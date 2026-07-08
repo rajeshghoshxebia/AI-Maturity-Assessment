@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user, CurrentUser
-from app.core.permissions import can_see_org
+from app.core.permissions import can_edit_org, can_view_org
 from app.core.scoring import compute_dimension_score, compute_overall_score, maturity_label, DimensionScore
 from app.core.tenant import apply_rls
 from app.db.session import get_db
@@ -34,9 +34,8 @@ async def _check_access(
     await apply_rls(db, user.tenant_id)
     repo = AssessmentRepository(db)
     obj = await repo.get(assessment_id)
-    # Users may only conduct assessments within their organization scope
-    # (admins have unrestricted scope).
-    if not obj or not can_see_org(user, obj.org_id):
+    # Read access: admins/consultants can view all; others limited to scope.
+    if not obj or not can_view_org(user, obj.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
     return obj
 
@@ -81,7 +80,9 @@ async def upsert_responses(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[ResponseOut]:
-    await _check_access(assessment_id, user, db)
+    obj = await _check_access(assessment_id, user, db)
+    if not can_edit_org(user, obj.org_id):
+        raise HTTPException(status_code=403, detail="You can only conduct assessments for your assigned organizations")
     repo = ResponseRepository(db)
     results = []
     for item in body.responses:

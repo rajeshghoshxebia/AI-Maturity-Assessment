@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user, CurrentUser
-from app.core.permissions import can_see_org
+from app.core.permissions import can_edit_org, can_view_org
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.assessment import Assessment
@@ -92,8 +92,10 @@ async def generate_ai_report(
 
     repo = AssessmentRepository(db)
     assessment = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not assessment or not can_see_org(user, assessment.org_id):
+    if not assessment or not can_view_org(user, assessment.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
+    if not can_edit_org(user, assessment.org_id):
+        raise HTTPException(status_code=403, detail="You can only generate reports for your assigned organizations")
 
     dim_repo = DimensionRepository(db)
     resp_repo = ResponseRepository(db)
@@ -254,7 +256,7 @@ async def domain_benchmark(
 
     repo = AssessmentRepository(db)
     assessment = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not assessment or not can_see_org(user, assessment.org_id):
+    if not assessment or not can_view_org(user, assessment.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
 
     if not assessment.org_id:

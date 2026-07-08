@@ -63,10 +63,28 @@ def require_roles(*roles: str):
     return _guard
 
 
-def can_see_org(user: CurrentUser, org_id: UUID | None) -> bool:
-    """True if the user's org scope permits this organization (None scope = all)."""
+def can_edit_org(user: CurrentUser, org_id: UUID | None) -> bool:
+    """Write access: only within the user's org scope (None scope = admin = all)."""
     if user.org_scope is None:
         return True
     if org_id is None:
         return False
     return org_id in user.org_scope
+
+
+def can_view_org(user: CurrentUser, org_id: UUID | None) -> bool:
+    """Read access. Admins and Assessment Consultants can view across
+    organizations (consultants get read-only visibility of everything, editing
+    only their assigned orgs); everyone else is limited to their scope."""
+    if user.org_scope is None:
+        return True
+    if user.role == CONSULTANT:
+        return True
+    if org_id is None:
+        return False
+    return org_id in user.org_scope
+
+
+# Backwards-compatible alias (edit semantics).
+def can_see_org(user: CurrentUser, org_id: UUID | None) -> bool:
+    return can_edit_org(user, org_id)

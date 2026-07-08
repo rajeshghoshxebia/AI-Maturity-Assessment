@@ -57,5 +57,6 @@ class AssessmentListOut(BaseModel):
     mode: AssessmentMode
     status: AssessmentStatus
     created_at: datetime
+    org_id: UUID | None = None
 
     model_config = {"from_attributes": True}
