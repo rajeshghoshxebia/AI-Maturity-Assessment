@@ -5,10 +5,10 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts";
 import {
-  ArrowLeft, ChevronDown, ChevronRight, FileText, Layers, Loader2,
+  ArrowLeft, ChevronDown, ChevronRight, FileText, Gauge, Layers, Loader2,
   MessageSquare, Presentation, Sparkles, Users,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
@@ -46,6 +46,20 @@ const LEVEL_OPTIONS: { value: ReportLevel; label: string }[] = [
   { value: "DEPARTMENT", label: "Department" },
   { value: "TEAM", label: "Team" },
 ];
+
+interface BenchmarkDimension { code: string; name: string; your_score: number; industry_avg: number }
+interface BenchmarkOrg { label: string; overall: number; is_you: boolean }
+interface BenchmarkResponse {
+  available: boolean;
+  reason: string | null;
+  industry: string | null;
+  org_count: number;
+  your_overall: number;
+  industry_average: number;
+  top_quartile: number;
+  dimensions: BenchmarkDimension[];
+  organizations: BenchmarkOrg[];
+}
 
 function maturityColor(label: string) { return MATURITY_COLORS[label] ?? VELVET; }
 
@@ -119,6 +133,7 @@ export default function ReportPage() {
   const [customPrompt, setCustomPrompt] = useState("");
   // Report download is gated on a mandatory human review/edit of the summary.
   const [reviewed, setReviewed] = useState(false);
+  const [benchmark, setBenchmark] = useState<BenchmarkResponse | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -131,6 +146,7 @@ export default function ReportPage() {
         if (a.per_team && a.org_id) {
           api.get<HierarchyScoreOut>(`/assessments/${id}/responses/score/hierarchy`).then(setHierarchy).catch(() => {});
         }
+        api.get<BenchmarkResponse>(`/assessments/${id}/benchmark`).then(setBenchmark).catch(() => {});
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -272,6 +288,29 @@ export default function ReportPage() {
           ];
           s7.addTable(teamRows, { x: 0.5, y: 1.0, w: 12.5, colW: [5, 2, 1.5, 4], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
         }
+      }
+
+      // Slide 8: Domain benchmarking (if available)
+      if (benchmark?.available) {
+        const s8 = prs.addSlide();
+        s8.addText(`Domain Benchmarking — ${benchmark.industry}`, { x: 0.5, y: 0.3, w: 12, h: 0.6, fontSize: 22, bold: true, color: "150027", fontFace: "Arial" });
+        s8.addText(
+          `Your Organisation: ${formatScore(benchmark.your_overall)}   |   Industry Average: ${formatScore(benchmark.industry_average)}   |   Top Quartile: ${formatScore(benchmark.top_quartile)}   (${benchmark.org_count} organisations, anonymised)`,
+          { x: 0.5, y: 1.0, w: 12.5, h: 0.4, fontSize: 12, color: "374151", fontFace: "Arial" },
+        );
+        const benchRows: any[] = [
+          [
+            { text: "Dimension", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+            { text: "Your Score", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+            { text: "Industry Avg", options: { bold: true, color: "FFFFFF", fill: { color: "831B84" } } },
+          ],
+          ...benchmark.dimensions.map((d) => [
+            { text: d.name },
+            { text: formatScore(d.your_score), options: { bold: true } },
+            { text: formatScore(d.industry_avg) },
+          ]),
+        ];
+        s8.addTable(benchRows, { x: 0.5, y: 1.6, w: 9, colW: [5, 2, 2], fontSize: 11, fontFace: "Arial", border: { pt: 0.5, color: "E2E8F0" } });
       }
 
       await prs.writeFile({ fileName: `AI-Maturity-Report-${assessment.organization_name}.pptx` });
@@ -515,6 +554,82 @@ export default function ReportPage() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Domain benchmarking */}
+        {benchmark?.available && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-1">
+              <Gauge className="h-4 w-4 text-velvet shrink-0" />
+              <h3 className="font-semibold text-grey-900">Domain Benchmarking</h3>
+              <span className="ml-auto text-xs text-grey-400">{benchmark.industry} · {benchmark.org_count} organisations (anonymised)</span>
+            </div>
+            <p className="text-xs text-grey-500 mb-4">How this organisation compares with others in the same industry. Peer organisations are anonymised.</p>
+
+            {/* Overall stat cards */}
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <div className="rounded-lg border border-velvet/30 bg-velvet/5 p-3">
+                <p className="text-xs text-grey-500">Your Organisation</p>
+                <p className="text-2xl font-bold text-velvet mt-0.5">{formatScore(benchmark.your_overall)}</p>
+              </div>
+              <div className="rounded-lg border border-grey-200 p-3">
+                <p className="text-xs text-grey-500">Industry Average</p>
+                <p className="text-2xl font-bold text-grey-800 mt-0.5">{formatScore(benchmark.industry_average)}</p>
+              </div>
+              <div className="rounded-lg border border-grey-200 p-3">
+                <p className="text-xs text-grey-500">Top Quartile</p>
+                <p className="text-2xl font-bold text-grey-800 mt-0.5">{formatScore(benchmark.top_quartile)}</p>
+              </div>
+            </div>
+
+            {/* Per-dimension: you vs industry average */}
+            {benchmark.dimensions.length > 0 && (
+              <ResponsiveContainer width="100%" height={Math.max(220, benchmark.dimensions.length * 44)}>
+                <BarChart
+                  data={benchmark.dimensions.map((d) => ({ name: d.name, You: d.your_score, Industry: d.industry_avg }))}
+                  layout="vertical"
+                  margin={{ top: 0, right: 40, bottom: 0, left: 0 }}
+                  barGap={2}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                  <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickCount={6} />
+                  <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                  <Tooltip formatter={(v: number) => formatScore(v)} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="You" fill={VELVET} radius={[0, 3, 3, 0]} maxBarSize={12} />
+                  <Bar dataKey="Industry" fill="#cbd5e1" radius={[0, 3, 3, 0]} maxBarSize={12} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+
+            {/* Anonymised organisation comparison */}
+            {benchmark.organizations.length > 1 && (
+              <div className="mt-5">
+                <p className="text-xs font-medium text-grey-500 uppercase tracking-wide mb-2">Organisations in {benchmark.industry}</p>
+                <ResponsiveContainer width="100%" height={Math.max(160, benchmark.organizations.length * 34)}>
+                  <BarChart
+                    data={benchmark.organizations.map((o) => ({ name: o.label, score: o.overall, you: o.is_you }))}
+                    layout="vertical"
+                    margin={{ top: 0, right: 50, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                    <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11, fill: "#9ca3af" }} tickCount={6} />
+                    <YAxis dataKey="name" type="category" width={140} tick={{ fontSize: 11, fill: "#6b7280" }} />
+                    <Tooltip formatter={(v: number) => [formatScore(v), "Overall"]} contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }} />
+                    <Bar dataKey="score" radius={[0, 4, 4, 0]} maxBarSize={22}>
+                      {benchmark.organizations.map((o, i) => <Cell key={i} fill={o.is_you ? VELVET : "#cbd5e1"} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            <p className="text-[11px] text-grey-400 mt-4 leading-relaxed border-t border-grey-100 pt-3">
+              Benchmarks support learning and prioritisation, not ranking. Organisations operate in different
+              contexts and constraints, so comparisons should be interpreted alongside organisational context,
+              evidence, and consultant observations — never as a simple league table.
+            </p>
           </div>
         )}
 
