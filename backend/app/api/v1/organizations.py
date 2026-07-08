@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user, CurrentUser
-from app.core.permissions import can_see_org
+from app.core.permissions import ADMIN, can_see_org, require_roles
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.organization import Organization, OrgUnit
@@ -20,6 +20,9 @@ from app.schemas.organization import (
 )
 
 router = APIRouter()
+
+# Organization master data + questionnaire (unit dimension) config: Admin only.
+_admin = require_roles(ADMIN)
 
 
 def _build_tree(units: list[OrgUnit]) -> list[OrgUnitOut]:
@@ -98,7 +101,7 @@ async def list_organizations(
 @router.post("", response_model=OrganizationOut, status_code=201)
 async def create_organization(
     body: OrganizationCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> OrganizationOut:
     await apply_rls(db, user.tenant_id)
@@ -136,7 +139,7 @@ async def get_organization(
 async def update_organization(
     org_id: UUID,
     body: OrganizationUpdate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> OrganizationOut:
     org = await _get_org(org_id, user, db)
@@ -156,7 +159,7 @@ async def update_organization(
 @router.delete("/{org_id}", status_code=204, response_class=Response)
 async def delete_organization(
     org_id: UUID,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     org = await _get_org(org_id, user, db)
@@ -171,7 +174,7 @@ async def delete_organization(
 async def create_unit(
     org_id: UUID,
     body: OrgUnitCreate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> OrgUnitOut:
     org = await _get_org(org_id, user, db)
@@ -201,7 +204,7 @@ async def update_unit(
     org_id: UUID,
     unit_id: UUID,
     body: OrgUnitUpdate,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> OrgUnitOut:
     await _get_org(org_id, user, db)
@@ -235,7 +238,7 @@ async def update_unit(
 async def delete_unit(
     org_id: UUID,
     unit_id: UUID,
-    user: CurrentUser = Depends(get_current_user),
+    user: CurrentUser = Depends(_admin),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     await _get_org(org_id, user, db)

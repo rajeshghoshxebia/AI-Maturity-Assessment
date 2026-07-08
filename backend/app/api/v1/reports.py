@@ -6,11 +6,17 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.auth import get_current_user, CurrentUser
+from app.core.permissions import can_see_org
 from app.core.tenant import apply_rls
 from app.db.session import get_db
+from app.models.assessment import Assessment
+from app.models.organization import Organization
+from app.models.response import Response
 from app.repositories.assessment import AssessmentRepository
 from app.repositories.dimension import DimensionRepository
 from app.repositories.response import ResponseRepository
@@ -45,6 +51,31 @@ class GenerateReportRequest(BaseModel):
     custom_prompt: str | None = None
 
 
+class BenchmarkDimension(BaseModel):
+    code: str
+    name: str
+    your_score: float
+    industry_avg: float
+
+
+class BenchmarkOrg(BaseModel):
+    label: str          # anonymised ("Organization A") or "Your Organization"
+    overall: float
+    is_you: bool
+
+
+class BenchmarkResponse(BaseModel):
+    available: bool
+    reason: str | None = None
+    industry: str | None = None
+    org_count: int = 0
+    your_overall: float = 0.0
+    industry_average: float = 0.0
+    top_quartile: float = 0.0
+    dimensions: list[BenchmarkDimension] = []
+    organizations: list[BenchmarkOrg] = []
+
+
 class GenerateReportResponse(BaseModel):
     narrative: str
     model_used: str
@@ -61,7 +92,7 @@ async def generate_ai_report(
 
     repo = AssessmentRepository(db)
     assessment = await repo.get_with_relations(assessment_id, user.tenant_id)
-    if not assessment:
+    if not assessment or not can_see_org(user, assessment.org_id):
         raise HTTPException(status_code=404, detail="Assessment not found")
 
     dim_repo = DimensionRepository(db)
@@ -192,3 +223,118 @@ async def generate_ai_report(
         raise HTTPException(status_code=502, detail=f"AI generation failed: {type(e).__name__}: {e}")
 
     return GenerateReportResponse(narrative=narrative, model_used=model_used)
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    rank = pct * (len(ordered) - 1)
+    lo = int(rank)
+    hi = min(lo + 1, len(ordered) - 1)
+    frac = rank - lo
+    return round(ordered[lo] + (ordered[hi] - ordered[lo]) * frac, 2)
+
+
+@router.get("/{assessment_id}/benchmark", response_model=BenchmarkResponse)
+async def domain_benchmark(
+    assessment_id: UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BenchmarkResponse:
+    """Anonymised industry (domain) benchmarking.
+
+    Compares this assessment's organization against the average and top quartile
+    of all organizations in the same industry, per dimension and overall. Other
+    organizations are never named — they appear as 'Organization A/B/C…'.
+    """
+    await apply_rls(db, user.tenant_id)
+
+    repo = AssessmentRepository(db)
+    assessment = await repo.get_with_relations(assessment_id, user.tenant_id)
+    if not assessment or not can_see_org(user, assessment.org_id):
+        raise HTTPException(status_code=404, detail="Assessment not found")
+
+    if not assessment.org_id:
+        return BenchmarkResponse(available=False, reason="Assessment is not linked to an organization.")
+
+    org = await db.get(Organization, assessment.org_id)
+    if org is None or not org.industry:
+        return BenchmarkResponse(available=False, reason="Organization has no industry set for benchmarking.")
+
+    # Organizations in the same industry (tenant-scoped by RLS).
+    peer_rows = (await db.execute(
+        select(Organization.id).where(
+            Organization.tenant_id == user.tenant_id,
+            Organization.industry == org.industry,
+        )
+    )).scalars().all()
+    peer_ids = set(peer_rows)
+
+    # All responses across those organizations' assessments, tagged with org id.
+    resp_rows = (await db.execute(
+        select(Response, Assessment.org_id)
+        .join(Assessment, Assessment.id == Response.assessment_id)
+        .where(Assessment.org_id.in_(peer_ids))
+        .options(selectinload(Response.question))
+    )).all()
+
+    by_org: dict = {}
+    for resp, org_id in resp_rows:
+        by_org.setdefault(org_id, []).append(resp)
+
+    dim_repo = DimensionRepository(db)
+    dimensions = await dim_repo.list_all_with_questions()
+
+    # Per-org overall + per-dimension scores (only orgs with responses count).
+    org_overall: dict = {}
+    org_dim: dict = {}
+    for org_id, responses in by_org.items():
+        overall, dim_scores = _build_score_from_responses(responses, dimensions)
+        if not dim_scores:
+            continue
+        org_overall[org_id] = round(overall, 2)
+        org_dim[org_id] = {ds.dimension_code: ds.score for ds in dim_scores}
+
+    if len(org_overall) < 2:
+        return BenchmarkResponse(
+            available=False, industry=org.industry, org_count=len(org_overall),
+            reason="Not enough organizations with scores in this industry yet to benchmark.",
+        )
+
+    overalls = list(org_overall.values())
+    industry_average = round(sum(overalls) / len(overalls), 2)
+    top_quartile = _percentile(overalls, 0.75)
+    your_overall = org_overall.get(assessment.org_id, 0.0)
+
+    # Per-dimension: your score vs industry average across peers that have it.
+    dim_out: list[BenchmarkDimension] = []
+    your_dims = org_dim.get(assessment.org_id, {})
+    for dim in dimensions:
+        peer_scores = [d[dim.code] for d in org_dim.values() if dim.code in d]
+        if not peer_scores:
+            continue
+        dim_out.append(BenchmarkDimension(
+            code=dim.code, name=dim.name,
+            your_score=round(your_dims.get(dim.code, 0.0), 2),
+            industry_avg=round(sum(peer_scores) / len(peer_scores), 2),
+        ))
+
+    # Anonymised org list (highest first); the current org is flagged, others lettered.
+    others = sorted(
+        [(oid, ov) for oid, ov in org_overall.items() if oid != assessment.org_id],
+        key=lambda x: x[1], reverse=True,
+    )
+    orgs_out: list[BenchmarkOrg] = [
+        BenchmarkOrg(label="Your Organization", overall=your_overall, is_you=True)
+    ]
+    for i, (_oid, ov) in enumerate(others):
+        orgs_out.append(BenchmarkOrg(label=f"Organization {chr(65 + i)}", overall=ov, is_you=False))
+
+    return BenchmarkResponse(
+        available=True, industry=org.industry, org_count=len(org_overall),
+        your_overall=your_overall, industry_average=industry_average,
+        top_quartile=top_quartile, dimensions=dim_out, organizations=orgs_out,
+    )
