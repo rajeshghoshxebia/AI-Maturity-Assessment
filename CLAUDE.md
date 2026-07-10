@@ -2,33 +2,35 @@
 
 ## Git Workflow
 
-### Branch naming
-Always create a feature branch before starting work. Never commit directly to `main`.
+### Branch model
+Two long-lived branches:
+- **`preview`** — integration branch. All day-to-day changes land here and deploy to the **preview environment** (separate Vercel + Render URLs and database). This is the default working branch.
+- **`main`** — production. Only updated by promoting `preview`. Push to `main` deploys to production.
 
-Branch name format: `feature/YYYY-MM-DD`
-- Use today's date in the format above.
-- If multiple branches are needed on the same day, append a short slug: `feature/2026-06-29-cors-fix`
+Do all work on `preview` (commit directly, or via short-lived feature branches merged into `preview`). Do **not** develop directly on `main`.
 
-### Creating a branch
+### Working on preview
 ```bash
-git checkout -b feature/YYYY-MM-DD
-git push -u origin feature/YYYY-MM-DD
+git checkout preview
+git pull origin preview
+# ...make changes...
+git commit -m "…"
+git push origin preview      # → deploys to the preview URLs
 ```
 
-### Pull requests
-- Open a PR from the feature branch into `main`.
-- Title: imperative sentence summarising the change (e.g. "Fix CORS for Vercel preview URLs").
-- After the PR is merged, delete the remote branch immediately.
+Optional feature branches still use `feature/YYYY-MM-DD` (append a slug for multiples, e.g. `feature/2026-06-29-cors-fix`) and merge into `preview`.
 
-### After merge — delete the branch
+### Releasing to production
+Promote `preview` → `main` once verified on the preview URLs:
 ```bash
-git push origin --delete feature/YYYY-MM-DD
 git checkout main
 git pull origin main
-git branch -d feature/YYYY-MM-DD
+git merge --ff-only preview   # or open a PR: preview → main
+git push origin main          # → deploys to production
+git checkout preview          # resume work on preview
 ```
 
-GitHub is configured to auto-delete head branches on merge (Settings → General → "Automatically delete head branches").
+Prefer a PR (`preview → main`) with an imperative title when you want review before release.
 
 ## Stack
 
@@ -57,5 +59,14 @@ npm run dev
 
 ## Deployment
 
-- Push to `main` triggers Vercel redeploy (frontend).
-- Push to `main` triggers Render redeploy (backend); start command runs `alembic upgrade head && python -m seeds.runner` before starting uvicorn.
+Two environments, each driven by its branch (see `docs/preview-environment.md`):
+
+| Env | Branch | Frontend (Vercel) | Backend (Render) |
+|-----|--------|-------------------|------------------|
+| Preview | `preview` | preview URL (`…-git-preview-…`) | `ai-maturity-backend-preview` |
+| Production | `main` | production URL | `ai-maturity-backend` |
+
+- Push to `preview` → deploys the preview environment.
+- Push to `main` → deploys production.
+- On both, the backend start command runs `alembic upgrade head && python -m seeds.runner` before uvicorn.
+- Preview uses a **separate database** and its own env vars; never point preview at the production DB.

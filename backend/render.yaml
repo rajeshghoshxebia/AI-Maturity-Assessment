@@ -1,9 +1,44 @@
 services:
+  # ── Production backend (deploys from main) ──────────────────────────────
   - type: web
     name: ai-maturity-backend
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
+    branch: main
     envVars:
       - key: PORT
         value: 8000
+      # Secrets/config are managed in the Render dashboard (not synced here).
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AZURE_TENANT_ID
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+  # ── Preview backend (deploys from the preview branch) ───────────────────
+  # Separate service = separate URL and separate database, isolated from prod.
+  - type: web
+    name: ai-maturity-backend-preview
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: preview
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: DATABASE_URL
+        sync: false      # point at a SEPARATE (preview) database
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AZURE_TENANT_ID
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false      # include the Vercel preview origin(s)
