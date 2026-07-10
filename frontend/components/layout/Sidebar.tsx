@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  FileText,
   Home,
   LogOut,
   Menu,
@@ -26,10 +27,13 @@ import { useSidebar } from "./sidebar-context";
 const CONSULTANT_HREFS = new Set([
   "/dashboard/organizations",
   "/dashboard/assessments",
+  "/dashboard/reports",
 ]);
-// All other non-admin roles: assessments (and their results) only.
+// All other non-admin roles: assessments, organizations, and reports.
 const MEMBER_HREFS = new Set([
   "/dashboard/assessments",
+  "/dashboard/organizations",
+  "/dashboard/reports",
 ]);
 
 type NavItem = { href: string; label: string; icon: any; disabled?: boolean; adminOnly?: boolean };
@@ -40,6 +44,7 @@ const nav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardList },
+  { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen, adminOnly: true },
   { href: "/dashboard/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/dashboard/consultants", label: "Consultant Access", icon: UserCog, adminOnly: true },

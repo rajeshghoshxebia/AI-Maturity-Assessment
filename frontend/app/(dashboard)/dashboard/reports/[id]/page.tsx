@@ -389,7 +389,7 @@ export default function ReportPage() {
       </div>
       {!editable ? (
         <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-2.5 text-sm text-blue-800">
-          View-only — this report belongs to an organization you are not assigned to. Summary generation and downloads are disabled.
+          View-only — this report belongs to an organization you are not assigned to. Summary editing, prompt changes, and downloads are disabled.
         </div>
       ) : !reviewed && (
         <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
@@ -455,13 +455,14 @@ export default function ReportPage() {
 
           {/* Custom prompt / template */}
           <div className="mb-3 rounded-lg border border-grey-200 bg-grey-50/60 p-3">
-            <label className="flex items-start gap-2.5 cursor-pointer">
+            <label className={`flex items-start gap-2.5 ${editable ? "cursor-pointer" : "cursor-not-allowed"}`}>
               <button
                 type="button"
                 role="switch"
                 aria-checked={useCustomPrompt}
-                onClick={() => setUseCustomPrompt((v) => !v)}
-                className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-velvet/40 ${useCustomPrompt ? "bg-velvet" : "bg-grey-300"}`}
+                onClick={() => editable && setUseCustomPrompt((v) => !v)}
+                disabled={!editable}
+                className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-velvet/40 ${useCustomPrompt ? "bg-velvet" : "bg-grey-300"} ${!editable ? "opacity-60" : ""}`}
               >
                 <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${useCustomPrompt ? "translate-x-4" : "translate-x-0"}`} />
               </button>
@@ -474,9 +475,10 @@ export default function ReportPage() {
               <textarea
                 rows={5}
                 value={customPrompt}
-                onChange={(e) => setCustomPrompt(e.target.value)}
+                onChange={(e) => editable && setCustomPrompt(e.target.value)}
+                disabled={!editable}
                 placeholder={"e.g. Write a 1-page executive brief for the board. Lead with the 3 biggest risks, then quick wins for the next quarter. Keep it under 400 words, plain language, no jargon."}
-                className="mt-3 w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-y focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+                className={`mt-3 w-full rounded-md border border-grey-300 px-3 py-2 text-sm resize-y focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet ${!editable ? "bg-grey-50 text-grey-500" : ""}`}
               />
             )}
           </div>
@@ -488,15 +490,17 @@ export default function ReportPage() {
             <div className="space-y-3">
               <textarea
                 value={aiNarrative}
-                onChange={(e) => { setAiNarrative(e.target.value); setReviewed(false); }}
+                onChange={(e) => editable && setAiNarrative(e.target.value) && setReviewed(false)}
+                readOnly={!editable}
                 rows={16}
-                className="w-full rounded-md border border-grey-300 px-3 py-2 text-sm leading-relaxed text-grey-800 resize-y focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+                className={`w-full rounded-md border border-grey-300 px-3 py-2 text-sm leading-relaxed resize-y focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet ${editable ? "text-grey-800" : "bg-grey-50 text-grey-600"}`}
               />
-              <label className="flex items-start gap-2.5 rounded-md bg-grey-50 border border-grey-200 px-3 py-2.5 cursor-pointer">
+              <label className={`flex items-start gap-2.5 rounded-md bg-grey-50 border border-grey-200 px-3 py-2.5 ${editable ? "cursor-pointer" : "cursor-not-allowed"}`}>
                 <input
                   type="checkbox"
                   checked={reviewed}
-                  onChange={(e) => setReviewed(e.target.checked)}
+                  onChange={(e) => editable && setReviewed(e.target.checked)}
+                  disabled={!editable}
                   className="mt-0.5 h-4 w-4 accent-velvet"
                 />
                 <span className="text-sm text-grey-700">
