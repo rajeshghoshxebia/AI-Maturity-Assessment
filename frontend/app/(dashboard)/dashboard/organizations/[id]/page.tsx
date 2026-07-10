@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronLeft, Edit2, Plus, Save, Trash2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { HierarchyBuilder, type LocalUnit } from "@/components/organizations/HierarchyBuilder";
+import { useMe, isAdmin, canEditOrg } from "@/lib/use-me";
 import type { Organization, OrgUnit } from "@/types/organization";
 import type { Dimension } from "@/types/assessment";
 
@@ -74,6 +75,8 @@ function flatPrev(units: OrgUnit[]): OrgUnit[] {
 export default function OrganizationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const me = useMe();
+  const admin = isAdmin(me);
   const [org, setOrg] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,21 +165,23 @@ export default function OrganizationDetailPage() {
           <ChevronLeft className="h-4 w-4" />
           Organizations
         </Link>
-        <button
-          onClick={deleteOrg}
-          disabled={deleting}
-          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
-        >
-          <Trash2 className="h-4 w-4" />
-          {deleting ? "Deleting…" : "Delete"}
-        </button>
+        {admin && (
+          <button
+            onClick={deleteOrg}
+            disabled={deleting}
+            className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        )}
       </div>
 
       {/* Details */}
       <div className="card p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-grey-900">{org.name}</h1>
-          {!editingDetails && (
+          {admin && !editingDetails && (
             <button
               onClick={() => setEditingDetails(true)}
               className="flex items-center gap-1.5 text-sm text-grey-500 hover:text-velvet transition-colors"
@@ -237,24 +242,28 @@ export default function OrganizationDetailPage() {
       {/* Hierarchy */}
       <div className="card p-6 space-y-4">
         <h2 className="text-sm font-semibold text-grey-900">Organization Hierarchy</h2>
-        <HierarchyBuilder units={units} onChange={setUnits} dimensions={dimensions} />
+        <HierarchyBuilder units={units} onChange={setUnits} dimensions={dimensions} readOnly={!admin} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-between items-center pt-1">
-          <Link
-            href={`/dashboard/assessments/new?org_id=${id}`}
-            className="flex items-center gap-1.5 text-sm text-velvet hover:text-velvet/80 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            New assessment for this org
-          </Link>
-          <button
-            onClick={saveHierarchy}
-            disabled={saving}
-            className="btn-primary disabled:opacity-50 flex items-center gap-2 text-sm"
-          >
-            <Save className="h-3.5 w-3.5" />
-            {saving ? "Saving…" : "Save hierarchy"}
-          </button>
+          {canEditOrg(me, org.id) ? (
+            <Link
+              href={`/dashboard/assessments/new?org_id=${id}`}
+              className="flex items-center gap-1.5 text-sm text-velvet hover:text-velvet/80 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              New assessment for this org
+            </Link>
+          ) : <span />}
+          {admin && (
+            <button
+              onClick={saveHierarchy}
+              disabled={saving}
+              className="btn-primary disabled:opacity-50 flex items-center gap-2 text-sm"
+            >
+              <Save className="h-3.5 w-3.5" />
+              {saving ? "Saving…" : "Save hierarchy"}
+            </button>
+          )}
         </div>
       </div>
     </div>

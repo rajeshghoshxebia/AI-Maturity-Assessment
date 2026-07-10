@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowRight, ChevronDown, ChevronUp, ClipboardList, Lock, Pencil, TrendingUp, Users } from "lucide-react";
 import { api } from "@/lib/api-client";
-import { useMe, canEditOrg } from "@/lib/use-me";
+import { useMe, canEditOrg, isAdmin } from "@/lib/use-me";
 import type { AssessmentMode, AssessmentStatus } from "@/types/assessment";
 
 interface AssessmentListItem {
@@ -50,6 +51,12 @@ function CollapsibleSection({
 export default function DashboardPage() {
   const [items, setItems] = useState<AssessmentListItem[]>([]);
   const me = useMe();
+  const router = useRouter();
+
+  // The Dashboard is an Administrator surface; other roles land on Assessments.
+  useEffect(() => {
+    if (me && !isAdmin(me)) router.replace("/dashboard/assessments");
+  }, [me, router]);
 
   useEffect(() => {
     api.get<AssessmentListItem[]>("/assessments").then(setItems).catch(() => {});

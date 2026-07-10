@@ -23,12 +23,14 @@ export function useMe(): Me | null {
   return me;
 }
 
-/** Write access: admin (null scope) can edit anything; others only their scoped orgs. */
+export const isAdmin = (me: Me | null) => me?.role === "ADMINISTRATOR";
+export const isConsultant = (me: Me | null) => me?.role === "ASSESSMENT_CONSULTANT";
+
+/** Write access (hierarchical): admins edit anything; consultants only their
+ *  assigned orgs; all other roles have no edit access. */
 export function canEditOrg(me: Me | null, orgId: string | null | undefined): boolean {
   if (!me) return false;
-  if (me.org_scope === null) return true;
-  if (!orgId) return false;
-  return me.org_scope.includes(orgId);
+  if (me.role === "ADMINISTRATOR") return true;
+  if (me.role === "ASSESSMENT_CONSULTANT") return !!orgId && (me.org_scope?.includes(orgId) ?? false);
+  return false;
 }
-
-export const isConsultant = (me: Me | null) => me?.role === "ASSESSMENT_CONSULTANT";

@@ -64,21 +64,25 @@ def require_roles(*roles: str):
 
 
 def can_edit_org(user: CurrentUser, org_id: UUID | None) -> bool:
-    """Write access: only within the user's org scope (None scope = admin = all)."""
-    if user.org_scope is None:
+    """Write access (hierarchical):
+    - Administrator: everything.
+    - Assessment Consultant: only their assigned organizations.
+    - All other roles: no edit access.
+    """
+    if user.role == ADMIN:
         return True
-    if org_id is None:
-        return False
-    return org_id in user.org_scope
+    if user.role == CONSULTANT:
+        return org_id is not None and user.org_scope is not None and org_id in user.org_scope
+    return False
 
 
 def can_view_org(user: CurrentUser, org_id: UUID | None) -> bool:
-    """Read access. Admins and Assessment Consultants can view across
-    organizations (consultants get read-only visibility of everything, editing
-    only their assigned orgs); everyone else is limited to their scope."""
-    if user.org_scope is None:
-        return True
-    if user.role == CONSULTANT:
+    """Read access, limited to the user's organization scope.
+    - Administrator (scope None): everything.
+    - Consultant: their assigned organizations.
+    - Other roles: their own organization.
+    """
+    if user.role == ADMIN or user.org_scope is None:
         return True
     if org_id is None:
         return False

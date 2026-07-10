@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Building2, Check, ChevronRight, MoreHorizontal, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useMe, isAdmin } from "@/lib/use-me";
 import type { OrganizationListItem } from "@/types/organization";
 
 function OrgActionsMenu({ org, onDelete }: { org: OrganizationListItem; onDelete: (id: string) => void }) {
@@ -67,6 +68,8 @@ export default function OrganizationsPage() {
   const [orgs, setOrgs] = useState<OrganizationListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const me = useMe();
+  const admin = isAdmin(me);
 
   useEffect(() => {
     api.get<OrganizationListItem[]>("/organizations")
@@ -91,13 +94,15 @@ export default function OrganizationsPage() {
           <h1 className="text-xl font-semibold text-grey-900 md:text-2xl">Organizations</h1>
           <p className="text-sm text-grey-500 mt-0.5">Manage client organizations and their team hierarchies</p>
         </div>
-        <Link
-          href="/dashboard/organizations/new"
-          className="btn-primary inline-flex items-center gap-2 self-start sm:self-auto"
-        >
-          <Plus className="h-4 w-4" />
-          New Organization
-        </Link>
+        {admin && (
+          <Link
+            href="/dashboard/organizations/new"
+            className="btn-primary inline-flex items-center gap-2 self-start sm:self-auto"
+          >
+            <Plus className="h-4 w-4" />
+            New Organization
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -151,7 +156,7 @@ export default function OrganizationsPage() {
                         <Link href={`/dashboard/organizations/${org.id}`} className="btn-secondary text-xs px-3 py-1.5">
                           View
                         </Link>
-                        <OrgActionsMenu org={org} onDelete={handleDelete} />
+                        {admin && <OrgActionsMenu org={org} onDelete={handleDelete} />}
                       </div>
                     </td>
                   </tr>

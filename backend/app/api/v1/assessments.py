@@ -63,9 +63,9 @@ async def list_assessments(
 ) -> list[AssessmentListOut]:
     repo, user = deps
     items = await repo.list_for_tenant(user.tenant_id)
-    # Admins and consultants can view all assessments (consultants edit only
-    # their assigned ones). Other scoped roles see only their organizations'.
-    if user.org_scope is not None and user.role != CONSULTANT:
+    # Scope-limited for everyone except admins (scope None): consultants see
+    # their assigned organizations; other roles see their own organization.
+    if user.org_scope is not None:
         items = [a for a in items if a.org_id in user.org_scope]
     return [AssessmentListOut.model_validate(a) for a in items]
 

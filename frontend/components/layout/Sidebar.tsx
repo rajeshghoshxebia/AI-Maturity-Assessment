@@ -22,11 +22,14 @@ import { useMe } from "@/lib/use-me";
 import { useState, useEffect } from "react";
 import { useSidebar } from "./sidebar-context";
 
-// Assessment Consultants get a limited workspace.
+// Nav visible per role (Administrators see everything).
 const CONSULTANT_HREFS = new Set([
-  "/dashboard",
+  "/dashboard/organizations",
   "/dashboard/assessments",
-  "/dashboard/questions",
+]);
+// All other non-admin roles: assessments (and their results) only.
+const MEMBER_HREFS = new Set([
+  "/dashboard/assessments",
 ]);
 
 const nav = [
@@ -55,9 +58,9 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const me = useMe();
 
-  const visibleNav = me?.role === "ASSESSMENT_CONSULTANT"
-    ? nav.filter((n) => CONSULTANT_HREFS.has(n.href))
-    : nav;
+  const visibleNav = !me || me.role === "ADMINISTRATOR"
+    ? nav
+    : nav.filter((n) => (me.role === "ASSESSMENT_CONSULTANT" ? CONSULTANT_HREFS : MEMBER_HREFS).has(n.href));
 
   useEffect(() => { setMobileOpen(false); }, [path]);
 
