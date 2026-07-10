@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, setAppToken } from "@/lib/auth";
+import { signIn, setAppToken, clearAppToken } from "@/lib/auth";
 import { api } from "@/lib/api-client";
 
 const IS_DEV = !process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
@@ -46,8 +46,11 @@ export default function LoginPage() {
     setError(null);
     try {
       if (IS_DEV) {
-        // Dev mode: no Azure AD — go straight to dashboard
-        router.push("/dashboard");
+        // Dev mode: no Azure AD. Clear any stale credential token so the dev
+        // bypass (Administrator) applies instead of a previous user's session.
+        // Full reload so cached role/session state is refetched.
+        clearAppToken();
+        window.location.href = "/dashboard";
         return;
       }
       await signIn();
