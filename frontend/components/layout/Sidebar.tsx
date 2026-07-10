@@ -68,6 +68,7 @@ export function Sidebar() {
   const me = useMe();
 
   const admin = me?.role === "ADMINISTRATOR";
+  const IS_DEV = !process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
   const visibleNav = nav.filter((n) => {
     // Admin-only tabs never show unless the role is confirmed admin.
     if (n.adminOnly) return admin;
@@ -116,6 +117,9 @@ export function Sidebar() {
           "flex items-center border-b border-white/10 transition-all duration-200",
           collapsed ? "md:justify-center px-0 py-5" : "px-6 py-5 justify-between",
         )}>
+          {IS_DEV && (
+            <div className="absolute right-2 top-2 text-xs text-white/60">Dev role: {me?.role ?? "(loading)"}</div>
+          )}
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <span className="text-white font-semibold text-lg tracking-tight">Xebia</span>
