@@ -32,14 +32,18 @@ const MEMBER_HREFS = new Set([
   "/dashboard/assessments",
 ]);
 
-const nav = [
+type NavItem = { href: string; label: string; icon: any; disabled?: boolean; adminOnly?: boolean };
+
+// adminOnly items (Question Bank, Users, Consultant Access, Settings) are hidden
+// for every non-admin — including while the role is still loading.
+const nav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/dashboard/organizations", label: "Organizations", icon: Building2 },
   { href: "/dashboard/assessments", label: "Assessments", icon: ClipboardList },
-  { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen },
-  { href: "/dashboard/users", label: "Users", icon: Users },
-  { href: "/dashboard/consultants", label: "Consultant Access", icon: UserCog },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, disabled: true },
+  { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen, adminOnly: true },
+  { href: "/dashboard/users", label: "Users", icon: Users, adminOnly: true },
+  { href: "/dashboard/consultants", label: "Consultant Access", icon: UserCog, adminOnly: true },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings, disabled: true, adminOnly: true },
 ];
 
 async function handleSignOut() {
@@ -58,9 +62,13 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const me = useMe();
 
-  const visibleNav = !me || me.role === "ADMINISTRATOR"
-    ? nav
-    : nav.filter((n) => (me.role === "ASSESSMENT_CONSULTANT" ? CONSULTANT_HREFS : MEMBER_HREFS).has(n.href));
+  const admin = me?.role === "ADMINISTRATOR";
+  const visibleNav = nav.filter((n) => {
+    // Admin-only tabs never show unless the role is confirmed admin.
+    if (n.adminOnly) return admin;
+    if (!me || admin) return true;
+    return (me.role === "ASSESSMENT_CONSULTANT" ? CONSULTANT_HREFS : MEMBER_HREFS).has(n.href);
+  });
 
   useEffect(() => { setMobileOpen(false); }, [path]);
 
