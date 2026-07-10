@@ -110,7 +110,24 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
-    # ── Dev short-circuit: no Azure AD configured ──────────────────────────
+    from app.models.user import User
+
+    # ── Path 1: app-issued JWT (credential login) ──────────────────────────
+    # Honoured FIRST so a real credential login (e.g. a Consultant) is never
+    # overridden by the dev bypass, even when Azure AD is not configured.
+    if credentials is not None:
+        app_payload = decode_access_token(credentials.credentials)
+        if app_payload is not None:
+            try:
+                user_id = UUID(app_payload["sub"])
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+            user = await db.get(User, user_id)
+            if user is None or not user.is_active:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account inactive or not found")
+            return await _load_and_scope(db, user)
+
+    # ── Dev short-circuit: no credential session and no Azure AD configured ─
     is_dev = settings.APP_ENV == "development" and not settings.AZURE_TENANT_ID
     if is_dev:
         return _dev_user()
@@ -118,21 +135,7 @@ async def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
 
-    from app.models.user import User
-
     token = credentials.credentials
-
-    # ── Path 1: app-issued JWT (credential login) ──────────────────────────
-    app_payload = decode_access_token(token)
-    if app_payload is not None:
-        try:
-            user_id = UUID(app_payload["sub"])
-        except (KeyError, ValueError) as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
-        user = await db.get(User, user_id)
-        if user is None or not user.is_active:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account inactive or not found")
-        return await _load_and_scope(db, user)
 
     # ── Path 2: Azure AD token → look up the real DB user ──────────────────
     payload = await _decode_token(token)
