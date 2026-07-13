@@ -1,17 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, KeyRound, Check, X, ShieldCheck } from "lucide-react";
+import { Plus, KeyRound, Check, X, ShieldCheck, Trash2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { ROLE_LABEL, type UserRole, type UserOut, type UserCreateResult } from "@/types/user";
 
 const ROLES: UserRole[] = [
-  "ADMINISTRATOR", "PC_ORGANIZATION", "PC_BUSINESS_UNIT", "PC_TEAM",
+  "ADMINISTRATOR", "PC_ORGANIZATION", "PC_BUSINESS_UNIT", "PC_DEPARTMENT", "PC_TEAM",
   "ASSESSMENT_CONSULTANT", "MEMBER", "VIEWER",
 ];
 
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (u: UserOut) => void }) {
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", role: "MEMBER" as UserRole });
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", role: "ASSESSMENT_CONSULTANT" as UserRole });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UserCreateResult | null>(null);
@@ -99,6 +99,22 @@ export default function UsersPage() {
     } catch { setError("Failed to reset password."); }
   }
 
+  async function deleteUser(u: UserOut) {
+    if (!confirm(`Permanently delete ${u.name ?? u.username ?? u.email}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/users/${u.id}`);
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    } catch { setError("Failed to delete user."); }
+  }
+
+  async function changeRole(u: UserOut, role: UserRole) {
+    if (role === u.role) return;
+    try {
+      const updated = await api.patch<UserOut>(`/users/${u.id}`, { role });
+      setUsers((prev) => prev.map((x) => x.id === u.id ? updated : x));
+    } catch { setError("Failed to change role."); }
+  }
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between gap-3">
@@ -143,7 +159,15 @@ export default function UsersPage() {
                   <td className="px-6 py-3 font-medium text-grey-900">{u.name ?? "—"}</td>
                   <td className="px-6 py-3 font-mono text-grey-600">{u.username ?? "—"}</td>
                   <td className="px-6 py-3 text-grey-500">{u.email}</td>
-                  <td className="px-6 py-3 text-grey-600">{ROLE_LABEL[u.role]}</td>
+                  <td className="px-6 py-3">
+                    <select
+                      value={u.role}
+                      onChange={(e) => changeRole(u, e.target.value as UserRole)}
+                      className="rounded-md border border-grey-200 bg-white px-2 py-1 text-xs text-grey-700 focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet"
+                    >
+                      {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                    </select>
+                  </td>
                   <td className="px-6 py-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${u.is_active ? "bg-green-50 text-green-700" : "bg-grey-100 text-grey-500"}`}>
                       {u.is_active ? <><ShieldCheck className="h-3 w-3" /> Active</> : "Inactive"}
@@ -153,6 +177,7 @@ export default function UsersPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => resetPassword(u)} title="Reset password" className="p-1.5 rounded-md text-grey-400 hover:text-velvet hover:bg-grey-100"><KeyRound className="h-4 w-4" /></button>
                       <button onClick={() => toggleActive(u)} title={u.is_active ? "Deactivate" : "Activate"} className="p-1.5 rounded-md text-grey-400 hover:text-grey-700 hover:bg-grey-100">{u.is_active ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}</button>
+                      <button onClick={() => deleteUser(u)} title="Delete permanently" className="p-1.5 rounded-md text-grey-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>

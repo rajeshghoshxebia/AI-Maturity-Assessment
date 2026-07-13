@@ -69,6 +69,7 @@ class CurrentUser:
         tenant_id: UUID,
         role: str,
         org_scope: set[UUID] | None = None,
+        unit_scope: set[UUID] | None = None,
     ) -> None:
         self.user_id = user_id
         self.oid = oid
@@ -77,6 +78,8 @@ class CurrentUser:
         self.role = role
         # Set of organization ids the user may see; None = unrestricted (admin).
         self.org_scope = org_scope
+        # Set of org-unit ids for hierarchy-report narrowing; None = all units.
+        self.unit_scope = unit_scope
 
 
 def _dev_user() -> CurrentUser:
@@ -93,16 +96,17 @@ def _dev_user() -> CurrentUser:
 
 async def _load_and_scope(db: AsyncSession, user) -> CurrentUser:
     """Build a CurrentUser from a DB user row, resolving its org scope."""
-    from app.core.permissions import resolve_org_scope
+    from app.core.permissions import resolve_scopes
 
     await apply_rls(db, user.tenant_id)
-    scope = await resolve_org_scope(
+    org_scope, unit_scope = await resolve_scopes(
         db, user_id=user.id, role=user.role.value,
         primary_org_unit_id=user.primary_org_unit_id,
     )
     return CurrentUser(
         user_id=user.id, oid=user.azure_oid or "", email=user.email,
-        tenant_id=user.tenant_id, role=user.role.value, org_scope=scope,
+        tenant_id=user.tenant_id, role=user.role.value,
+        org_scope=org_scope, unit_scope=unit_scope,
     )
 
 

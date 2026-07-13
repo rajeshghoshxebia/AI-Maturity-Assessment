@@ -232,6 +232,22 @@ async def get_hierarchy_score(
     root_units = sorted([u for u in org.units if u.parent_id is None], key=lambda x: x.sort_order)
     unit_trees = [_build(u) for u in root_units]
 
+    # Sub-tree narrowing: a Primary Contact only sees their unit and everything
+    # beneath it. Surface the scoped sub-tree roots (full sub-trees intact).
+    if user.unit_scope is not None:
+        scope_ids = {str(u) for u in user.unit_scope}
+
+        def _collect_scoped(nodes: list[UnitScoreOut]) -> list[UnitScoreOut]:
+            out: list[UnitScoreOut] = []
+            for n in nodes:
+                if n.unit_id in scope_ids:
+                    out.append(n)
+                else:
+                    out.extend(_collect_scoped(n.children))
+            return out
+
+        unit_trees = _collect_scoped(unit_trees)
+
     # Organisation total is the consolidated average across the top-level units
     # (business units), keeping the whole report on one averaging model.
     if any(u.overall_score > 0 for u in unit_trees):

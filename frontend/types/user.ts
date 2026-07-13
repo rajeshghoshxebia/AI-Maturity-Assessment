@@ -2,6 +2,7 @@ export type UserRole =
   | "ADMINISTRATOR"
   | "PC_ORGANIZATION"
   | "PC_BUSINESS_UNIT"
+  | "PC_DEPARTMENT"
   | "PC_TEAM"
   | "ASSESSMENT_CONSULTANT"
   | "MEMBER"
@@ -11,6 +12,7 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   ADMINISTRATOR: "Administrator",
   PC_ORGANIZATION: "Primary Contact — Organization",
   PC_BUSINESS_UNIT: "Primary Contact — Business Unit",
+  PC_DEPARTMENT: "Primary Contact — Department",
   PC_TEAM: "Primary Contact — Team",
   ASSESSMENT_CONSULTANT: "Assessment Consultant",
   MEMBER: "Member",

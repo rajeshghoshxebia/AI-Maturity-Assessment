@@ -9,6 +9,7 @@ export interface OrgUnit {
   sort_order: number;
   competency_codes: string[];
   active_dimension_codes: string[] | null;
+  primary_contact_id: string | null;
   children: OrgUnit[];
 }
 
@@ -17,6 +18,7 @@ export interface Organization {
   tenant_id: string;
   name: string;
   industry: string | null;
+  primary_contact_id: string | null;
   created_at: string;
   updated_at: string;
   units: OrgUnit[];
@@ -38,6 +40,7 @@ export interface OrganizationCreate {
 export interface OrganizationUpdate {
   name?: string;
   industry?: string;
+  primary_contact_id?: string | null;
 }
 
 export interface OrgUnitCreate {
@@ -47,6 +50,7 @@ export interface OrgUnitCreate {
   sort_order?: number;
   competency_codes?: string[];
   active_dimension_codes?: string[] | null;
+  primary_contact_id?: string | null;
 }
 
 export interface OrgUnitUpdate {
@@ -56,4 +60,5 @@ export interface OrgUnitUpdate {
   sort_order?: number;
   competency_codes?: string[];
   active_dimension_codes?: string[] | null;
+  primary_contact_id?: string | null;
 }
