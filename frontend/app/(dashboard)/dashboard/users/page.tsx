@@ -11,7 +11,7 @@ const ROLES: UserRole[] = [
 ];
 
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (u: UserOut) => void }) {
-  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", role: "MEMBER" as UserRole });
+  const [form, setForm] = useState({ first_name: "", last_name: "", email: "", role: "ASSESSMENT_CONSULTANT" as UserRole });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<UserCreateResult | null>(null);
