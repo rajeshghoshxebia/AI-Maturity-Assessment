@@ -60,6 +60,10 @@ async def _seed_dev_tenant(session: AsyncSession) -> None:
 
 async def seed(session: AsyncSession) -> None:
     await _seed_dev_tenant(session)
+    # Persist the tenant + Administrator credentials regardless of whether the
+    # framework (dimensions) has already been seeded — otherwise the early
+    # return below would roll these back on existing deployments.
+    await session.commit()
 
     # Skip if dimensions already seeded
     existing_dims = await session.execute(select(Dimension).limit(1))
