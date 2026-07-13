@@ -60,7 +60,7 @@ const nav: NavItem[] = [
   { href: "/dashboard/questions", label: "Question Bank", icon: BookOpen, adminOnly: true },
   { href: "/dashboard/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/dashboard/consultants", label: "Consultant Access", icon: UserCog, adminOnly: true },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, disabled: true, adminOnly: true },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings, adminOnly: true },
 ];
 
 async function handleSignOut() {

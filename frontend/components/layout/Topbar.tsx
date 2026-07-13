@@ -1,7 +1,9 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Bell, Moon, Sun } from "lucide-react";
 import { getActiveAccount } from "@/lib/auth";
+import { applyTheme, getStoredTheme, getSystemTheme, type ThemeMode } from "@/lib/theme";
 
 interface TopbarProps {
   title?: string;
@@ -9,6 +11,15 @@ interface TopbarProps {
 
 export function Topbar({ title }: TopbarProps) {
   const account = getActiveAccount();
+  const [theme, setTheme] = useState<ThemeMode>("light");
+
+  useEffect(() => {
+    const storedTheme = getStoredTheme();
+    const currentTheme = storedTheme ?? getSystemTheme();
+    setTheme(currentTheme);
+    applyTheme(currentTheme);
+  }, []);
+
   const initials = account?.name
     ? account.name
         .split(" ")
@@ -27,8 +38,20 @@ export function Topbar({ title }: TopbarProps) {
 
       <div className="flex items-center gap-3 shrink-0">
         <button
+          aria-label="Toggle theme"
+          onClick={() => {
+            const nextTheme = theme === "dark" ? "light" : "dark";
+            setTheme(nextTheme);
+            applyTheme(nextTheme);
+          }}
+          className="rounded-full border border-grey-200 bg-white p-2 text-grey-500 transition-colors hover:text-grey-900 dark:border-grey-700 dark:bg-grey-800 dark:text-grey-300"
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+
+        <button
           aria-label="Notifications"
-          className="text-grey-500 hover:text-grey-900 transition-colors"
+          className="text-grey-500 hover:text-grey-900 transition-colors dark:text-grey-300 dark:hover:text-white"
         >
           <Bell className="h-5 w-5" />
         </button>
