@@ -82,6 +82,24 @@ async def update_user(
     return UserOut.model_validate(target)
 
 
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    user: CurrentUser = Depends(_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Permanently delete a user. Their created assessments keep existing
+    (created_by set null), responses/assignments cascade or null per FK rules."""
+    await apply_rls(db, user.tenant_id)
+    target = await db.get(User, user_id)
+    if target is None or target.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == user.user_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+    await db.delete(target)
+    await db.commit()
+
+
 @router.post("/{user_id}/reset-password", response_model=PasswordResetOut)
 async def reset_password(
     user_id: UUID,
