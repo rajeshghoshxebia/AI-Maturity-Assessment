@@ -36,6 +36,17 @@ const MEMBER_HREFS = new Set([
   "/dashboard/reports",
 ]);
 
+// Per-role badge shown in the sidebar (colours tuned for the dark rail).
+const ROLE_BADGE: Record<string, { label: string; className: string; dot: string }> = {
+  ADMINISTRATOR:         { label: "Administrator",          className: "bg-velvet text-white",            dot: "bg-velvet" },
+  PC_ORGANIZATION:       { label: "Primary Contact · Org",  className: "bg-blue-500/20 text-blue-200",    dot: "bg-blue-400" },
+  PC_BUSINESS_UNIT:      { label: "Primary Contact · BU",   className: "bg-cyan-500/20 text-cyan-200",    dot: "bg-cyan-400" },
+  PC_TEAM:               { label: "Primary Contact · Team", className: "bg-teal-500/20 text-teal-200",    dot: "bg-teal-400" },
+  ASSESSMENT_CONSULTANT: { label: "Assessment Consultant",  className: "bg-amber-500/20 text-amber-200",  dot: "bg-amber-400" },
+  MEMBER:                { label: "Member",                 className: "bg-green-500/20 text-green-200",  dot: "bg-green-400" },
+  VIEWER:                { label: "Viewer",                 className: "bg-white/15 text-white/70",       dot: "bg-white/60" },
+};
+
 type NavItem = { href: string; label: string; icon: any; disabled?: boolean; adminOnly?: boolean };
 
 // adminOnly items (Question Bank, Users, Consultant Access, Settings) are hidden
@@ -68,7 +79,7 @@ export function Sidebar() {
   const me = useMe();
 
   const admin = me?.role === "ADMINISTRATOR";
-  const IS_DEV = !process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
+  const roleBadge = me ? (ROLE_BADGE[me.role] ?? { label: me.role, className: "bg-white/15 text-white/70", dot: "bg-white/60" }) : null;
   const visibleNav = nav.filter((n) => {
     // Admin-only tabs never show unless the role is confirmed admin.
     if (n.adminOnly) return admin;
@@ -117,14 +128,19 @@ export function Sidebar() {
           "flex items-center border-b border-white/10 transition-all duration-200",
           collapsed ? "md:justify-center px-0 py-5" : "px-6 py-5 justify-between",
         )}>
-          {IS_DEV && (
-            <div className="absolute right-2 top-2 text-xs text-white/60">Dev role: {me?.role ?? "(loading)"}</div>
-          )}
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <span className="text-white font-semibold text-lg tracking-tight">Xebia</span>
               <p className="text-white/50 text-xs mt-0.5">AI Maturity Platform</p>
+              {roleBadge && (
+                <span className={cn("mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", roleBadge.className)}>
+                  {roleBadge.label}
+                </span>
+              )}
             </div>
+          )}
+          {collapsed && roleBadge && (
+            <span className={cn("h-2 w-2 rounded-full", roleBadge.dot)} title={roleBadge.label} />
           )}
 
           {/* Desktop collapse toggle */}
