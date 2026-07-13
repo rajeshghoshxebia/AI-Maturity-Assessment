@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, KeyRound, Check, X, ShieldCheck } from "lucide-react";
+import { Plus, KeyRound, Check, X, ShieldCheck, Trash2 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { ROLE_LABEL, type UserRole, type UserOut, type UserCreateResult } from "@/types/user";
 
@@ -99,6 +99,14 @@ export default function UsersPage() {
     } catch { setError("Failed to reset password."); }
   }
 
+  async function deleteUser(u: UserOut) {
+    if (!confirm(`Permanently delete ${u.name ?? u.username ?? u.email}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/users/${u.id}`);
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    } catch { setError("Failed to delete user."); }
+  }
+
   async function changeRole(u: UserOut, role: UserRole) {
     if (role === u.role) return;
     try {
@@ -169,6 +177,7 @@ export default function UsersPage() {
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => resetPassword(u)} title="Reset password" className="p-1.5 rounded-md text-grey-400 hover:text-velvet hover:bg-grey-100"><KeyRound className="h-4 w-4" /></button>
                       <button onClick={() => toggleActive(u)} title={u.is_active ? "Deactivate" : "Activate"} className="p-1.5 rounded-md text-grey-400 hover:text-grey-700 hover:bg-grey-100">{u.is_active ? <X className="h-4 w-4" /> : <Check className="h-4 w-4" />}</button>
+                      <button onClick={() => deleteUser(u)} title="Delete permanently" className="p-1.5 rounded-md text-grey-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
