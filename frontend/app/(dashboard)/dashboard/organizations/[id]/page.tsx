@@ -9,6 +9,7 @@ import { HierarchyBuilder, type LocalUnit } from "@/components/organizations/Hie
 import { useMe, isAdmin, canEditOrg } from "@/lib/use-me";
 import type { Organization, OrgUnit } from "@/types/organization";
 import type { Dimension } from "@/types/assessment";
+import type { UserOut } from "@/types/user";
 
 const INDUSTRIES = [
   "Technology", "Financial Services", "Healthcare", "Retail",
@@ -24,6 +25,7 @@ function toLocalUnit(u: OrgUnit): LocalUnit {
     sort_order: u.sort_order,
     competency_codes: u.competency_codes,
     active_dimension_codes: u.active_dimension_codes,
+    primary_contact_id: u.primary_contact_id,
     children: u.children.map(toLocalUnit),
   };
 }
@@ -44,6 +46,7 @@ async function syncUnits(orgId: string, next: LocalUnit[], prev: OrgUnit[]) {
           sort_order: i,
           competency_codes: u.competency_codes,
           active_dimension_codes: u.active_dimension_codes,
+          primary_contact_id: u.primary_contact_id,
         });
         await processTree(u.children, created.id);
       } else {
@@ -54,6 +57,7 @@ async function syncUnits(orgId: string, next: LocalUnit[], prev: OrgUnit[]) {
           sort_order: i,
           competency_codes: u.competency_codes,
           active_dimension_codes: u.active_dimension_codes,
+          primary_contact_id: u.primary_contact_id,
         });
         await processTree(u.children, u.id);
       }
@@ -87,6 +91,8 @@ export default function OrganizationDetailPage() {
   const [editIndustry, setEditIndustry] = useState("");
   const [units, setUnits] = useState<LocalUnit[]>([]);
   const [dimensions, setDimensions] = useState<{ code: string; name: string }[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; label: string }[]>([]);
+  const [editContactId, setEditContactId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -96,12 +102,17 @@ export default function OrganizationDetailPage() {
         setOrg(o);
         setEditName(o.name);
         setEditIndustry(o.industry ?? "");
+        setEditContactId(o.primary_contact_id ?? "");
         setUnits(o.units.map(toLocalUnit));
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
     api.get<Dimension[]>("/dimensions")
       .then((dims) => setDimensions(dims.map((d) => ({ code: d.code, name: d.name }))))
+      .catch(() => {});
+    // Users for primary-contact dropdowns (admin-only endpoint).
+    api.get<UserOut[]>("/users")
+      .then((us) => setContacts(us.map((u) => ({ id: u.id, label: u.name ?? u.username ?? u.email }))))
       .catch(() => {});
   }, [id]);
 
@@ -112,6 +123,7 @@ export default function OrganizationDetailPage() {
       const updated = await api.patch<Organization>(`/organizations/${id}`, {
         name: editName.trim(),
         industry: editIndustry || null,
+        primary_contact_id: editContactId || null,
       });
       setOrg(updated);
       setEditingDetails(false);
@@ -214,6 +226,18 @@ export default function OrganizationDetailPage() {
                 {INDUSTRIES.map((ind) => <option key={ind} value={ind}>{ind}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-sm font-medium text-grey-700 mb-1.5">Primary contact (Organization)</label>
+              <select
+                value={editContactId}
+                onChange={(e) => setEditContactId(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-grey-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-velvet/30 focus:border-velvet bg-white"
+              >
+                <option value="">No organization primary contact</option>
+                {contacts.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+              </select>
+              <p className="text-xs text-grey-400 mt-1">Sees assessments &amp; reports across all business units.</p>
+            </div>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={saveDetails}
@@ -242,7 +266,7 @@ export default function OrganizationDetailPage() {
       {/* Hierarchy */}
       <div className="card p-6 space-y-4">
         <h2 className="text-sm font-semibold text-grey-900">Organization Hierarchy</h2>
-        <HierarchyBuilder units={units} onChange={setUnits} dimensions={dimensions} readOnly={!admin} />
+        <HierarchyBuilder units={units} onChange={setUnits} dimensions={dimensions} contacts={contacts} readOnly={!admin} />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex justify-between items-center pt-1">
           {canEditOrg(me, org.id) ? (

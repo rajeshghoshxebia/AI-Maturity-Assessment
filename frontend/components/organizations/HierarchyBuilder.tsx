@@ -23,6 +23,7 @@ interface LocalUnit {
   sort_order: number;
   competency_codes: string[];
   active_dimension_codes: string[] | null;
+  primary_contact_id: string | null;
   children: LocalUnit[];
 }
 
@@ -31,10 +32,16 @@ interface DimensionOption {
   name: string;
 }
 
+interface ContactOption {
+  id: string;
+  label: string;
+}
+
 interface Props {
   units: LocalUnit[];
   onChange: (units: LocalUnit[]) => void;
   dimensions?: DimensionOption[];
+  contacts?: ContactOption[];
   readOnly?: boolean;
 }
 
@@ -42,7 +49,7 @@ let idSeq = 0;
 function newId() { return `new-${++idSeq}`; }
 
 function newUnit(parent_id: string | null, sort_order: number): LocalUnit {
-  return { id: newId(), parent_id, name: "New Team", unit_type: "TEAM", sort_order, competency_codes: [], active_dimension_codes: null, children: [] };
+  return { id: newId(), parent_id, name: "New Team", unit_type: "TEAM", sort_order, competency_codes: [], active_dimension_codes: null, primary_contact_id: null, children: [] };
 }
 
 const TYPE_OPTIONS: { value: UnitType; label: string }[] = [
@@ -137,21 +144,25 @@ function UnitRow({
   unit,
   depth,
   dimensions,
+  contacts,
   readOnly,
   onAdd,
   onRename,
   onTypeChange,
   onDimChange,
+  onContactChange,
   onDelete,
 }: {
   unit: LocalUnit;
   depth: number;
   dimensions: DimensionOption[];
+  contacts: ContactOption[];
   readOnly: boolean;
   onAdd: (parentId: string) => void;
   onRename: (id: string, name: string) => void;
   onTypeChange: (id: string, type: UnitType) => void;
   onDimChange: (id: string, codes: string[] | null) => void;
+  onContactChange: (id: string, contactId: string | null) => void;
   onDelete: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -232,6 +243,21 @@ function UnitRow({
           <DimDropdown unit={unit} dimensions={dimensions} onChange={onDimChange} />
         )}
 
+        {/* Primary contact */}
+        {contacts.length > 0 && !readOnly && (
+          <select
+            value={unit.primary_contact_id ?? ""}
+            onChange={(e) => onContactChange(unit.id, e.target.value || null)}
+            title="Primary contact for this unit"
+            className="max-w-[10rem] text-xs text-grey-500 border border-grey-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-velvet shrink-0 bg-white"
+          >
+            <option value="">Primary contact…</option>
+            {contacts.map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+        )}
+
         {/* Actions (shown on hover) */}
         {!readOnly && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -272,11 +298,13 @@ function UnitRow({
               unit={child}
               depth={depth + 1}
               dimensions={dimensions}
+              contacts={contacts}
               readOnly={readOnly}
               onAdd={onAdd}
               onRename={onRename}
               onTypeChange={onTypeChange}
               onDimChange={onDimChange}
+              onContactChange={onContactChange}
               onDelete={onDelete}
             />
           ))}
@@ -314,13 +342,20 @@ function dimInTree(units: LocalUnit[], id: string, codes: string[] | null): Loca
   });
 }
 
+function contactInTree(units: LocalUnit[], id: string, contactId: string | null): LocalUnit[] {
+  return units.map((u) => {
+    if (u.id === id) return { ...u, primary_contact_id: contactId };
+    return { ...u, children: contactInTree(u.children, id, contactId) };
+  });
+}
+
 function deleteFromTree(units: LocalUnit[], id: string): LocalUnit[] {
   return units.filter((u) => u.id !== id).map((u) => ({ ...u, children: deleteFromTree(u.children, id) }));
 }
 
 export type { LocalUnit };
 
-export function HierarchyBuilder({ units, onChange, dimensions = [], readOnly = false }: Props) {
+export function HierarchyBuilder({ units, onChange, dimensions = [], contacts = [], readOnly = false }: Props) {
   function handleAdd(parentId: string | null) {
     const sibs = parentId
       ? (function find(list: LocalUnit[]): LocalUnit[] {
@@ -375,11 +410,13 @@ export function HierarchyBuilder({ units, onChange, dimensions = [], readOnly = 
               unit={u}
               depth={0}
               dimensions={dimensions}
+              contacts={contacts}
               readOnly={readOnly}
               onAdd={handleAdd}
               onRename={(id, name) => onChange(renameInTree(units, id, name))}
               onTypeChange={(id, type) => onChange(typeInTree(units, id, type))}
               onDimChange={(id, codes) => onChange(dimInTree(units, id, codes))}
+              onContactChange={(id, contactId) => onChange(contactInTree(units, id, contactId))}
               onDelete={(id) => onChange(deleteFromTree(units, id))}
             />
           ))
