@@ -735,7 +735,7 @@ export default function AssessmentDetailPage() {
                               <div className="flex items-center justify-between gap-3">
                                 <div>
                                   <p className="font-medium text-grey-700">Upload document</p>
-                                  <p className="mt-1 text-xs text-grey-500">Pick a local file; it will not be uploaded or stored.</p>
+                                  <p className="mt-1 text-xs text-grey-500">Proof of completion or additional context.</p>
                                 </div>
                                 <button
                                   type="button"
