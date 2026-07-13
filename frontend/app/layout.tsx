@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { initializeTheme } from "@/lib/theme";
 
 export const metadata: Metadata = {
   title: {
@@ -14,8 +15,10 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const initialTheme = initializeTheme();
+
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning data-theme={initialTheme}>
       <body>{children}</body>
     </html>
   );
