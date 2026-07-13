@@ -18,7 +18,7 @@ export function useMe(): Me | null {
   const [me, setMe] = useState<Me | null>(_cache);
   useEffect(() => {
     if (_cache) { setMe(_cache); return; }
-    api.get<Me>("/me").then((m) => { _cache = m; setMe(m); }).catch(() => {});
+    api.get<Me>("/auth/me").then((m) => { _cache = m; setMe(m); }).catch(() => {});
   }, []);
   return me;
 }
