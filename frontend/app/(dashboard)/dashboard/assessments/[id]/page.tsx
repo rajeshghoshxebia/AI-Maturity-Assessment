@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -324,6 +325,7 @@ export default function AssessmentDetailPage() {
   const [saving, setSaving] = useState(false);
   const [activeDim, setActiveDim] = useState<string | null>(null);
   const [pending, setPending] = useState<Record<string, { score: number; observations: string }>>({});
+  const [selectedDoc, setSelectedDoc] = useState<Record<string, string>>({});
 
   const [editOpen, setEditOpen] = useState(false);
   const me = useMe();
@@ -428,6 +430,18 @@ export default function AssessmentDetailPage() {
     const currentScore = pending[qid]?.score ?? responses[qid]?.score ?? 0;
     if (currentScore === 0) return;
     setPending((p) => ({ ...p, [qid]: { score: currentScore, observations: obs } }));
+  }
+
+  function openDocumentPicker(qid: string) {
+    const input = document.getElementById(`local-doc-picker-${qid}`) as HTMLInputElement | null;
+    input?.click();
+  }
+
+  function handleDocumentPicked(qid: string, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSelectedDoc((prev) => ({ ...prev, [qid]: file.name }));
+    event.target.value = "";
   }
 
   async function saveDimConfig(codes: string[] | null) {
@@ -708,14 +722,40 @@ export default function AssessmentDetailPage() {
                           )}
                         </div>
                         {currentScore > 0 && (
-                          <textarea
-                            rows={2}
-                            value={currentObs}
-                            onChange={(e) => setObservation(q.id, e.target.value)}
-                            readOnly={!editable}
-                            placeholder="Observations / evidence (optional)"
-                            className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400 read-only:bg-grey-50"
-                          />
+                          <>
+                            <textarea
+                              rows={2}
+                              value={currentObs}
+                              onChange={(e) => setObservation(q.id, e.target.value)}
+                              readOnly={!editable}
+                              placeholder="Observations / evidence (optional)"
+                              className="w-full rounded-md border border-grey-200 px-3 py-2 text-xs resize-none focus:border-velvet focus:outline-none focus:ring-1 focus:ring-velvet text-grey-700 placeholder:text-grey-400 read-only:bg-grey-50"
+                            />
+                            <div className="mt-2 rounded-md border border-dashed border-grey-200 bg-grey-50 px-3 py-3 text-xs text-grey-500">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <p className="font-medium text-grey-700">Upload document</p>
+                                  <p className="mt-1 text-xs text-grey-500">Pick a local file; it will not be uploaded or stored.</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => openDocumentPicker(q.id)}
+                                  className="rounded-md bg-velvet px-3 py-2 text-xs font-medium text-white hover:bg-velvet-dark transition-colors"
+                                >
+                                  Choose file
+                                </button>
+                              </div>
+                              {selectedDoc[q.id] && (
+                                <p className="mt-2 text-xs text-grey-600">Selected: {selectedDoc[q.id]}</p>
+                              )}
+                              <input
+                                id={`local-doc-picker-${q.id}`}
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => handleDocumentPicked(q.id, e)}
+                              />
+                            </div>
+                          </>
                         )}
                       </div>
                     );
