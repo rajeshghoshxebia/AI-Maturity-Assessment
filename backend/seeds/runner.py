@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.db.session import get_db
+from app.core.security import hash_password
 from app.models.dimension import Dimension, TechSubcategory
 from app.models.question import Question, CompetencyLevel
 from app.models.tenant import Tenant
@@ -19,6 +20,11 @@ from seeds.questions import QUESTIONS
 
 _DEV_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 _DEV_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
+
+# A real Administrator login that works in any environment (incl. production),
+# independent of the no-Azure dev bypass.
+_ADMIN_USERNAME = "admin"
+_ADMIN_PASSWORD = "admin@123"
 
 
 async def _seed_dev_tenant(session: AsyncSession) -> None:
@@ -35,7 +41,20 @@ async def _seed_dev_tenant(session: AsyncSession) -> None:
             email="dev@xebia.com",
             name="Dev User",
             role=UserRole.ADMINISTRATOR,
+            username=_ADMIN_USERNAME,
+            password_hash=hash_password(_ADMIN_PASSWORD),
+            is_active=True,
         ))
+        await session.flush()
+    else:
+        # Ensure the seeded admin always has working credentials + admin role
+        # (idempotent — backfills existing deployments).
+        existing_user.role = UserRole.ADMINISTRATOR
+        existing_user.is_active = True
+        if not existing_user.username:
+            existing_user.username = _ADMIN_USERNAME
+        if not existing_user.password_hash:
+            existing_user.password_hash = hash_password(_ADMIN_PASSWORD)
         await session.flush()
 
 
