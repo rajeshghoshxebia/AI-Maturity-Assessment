@@ -16,6 +16,7 @@ from app.models.user import UserRole
 ADMIN = UserRole.ADMINISTRATOR.value
 PC_ORG = UserRole.PC_ORGANIZATION.value
 PC_BU = UserRole.PC_BUSINESS_UNIT.value
+PC_DEPT = UserRole.PC_DEPARTMENT.value
 PC_TEAM = UserRole.PC_TEAM.value
 CONSULTANT = UserRole.ASSESSMENT_CONSULTANT.value
 MEMBER = UserRole.MEMBER.value
@@ -68,7 +69,7 @@ async def resolve_scopes(
             select(Organization.id).where(Organization.primary_contact_id == user_id)
         )
         return set(rows.scalars().all()), None
-    if role in (PC_BU, PC_TEAM) and primary_org_unit_id:
+    if role in (PC_BU, PC_DEPT, PC_TEAM) and primary_org_unit_id:
         unit = await db.get(OrgUnit, primary_org_unit_id)
         if unit is None:
             return set(), set()

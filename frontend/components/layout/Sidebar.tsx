@@ -41,6 +41,7 @@ const ROLE_BADGE: Record<string, { label: string; className: string; dot: string
   ADMINISTRATOR:         { label: "Administrator",          className: "bg-velvet text-white",            dot: "bg-velvet" },
   PC_ORGANIZATION:       { label: "Primary Contact · Org",  className: "bg-blue-500/20 text-blue-200",    dot: "bg-blue-400" },
   PC_BUSINESS_UNIT:      { label: "Primary Contact · BU",   className: "bg-cyan-500/20 text-cyan-200",    dot: "bg-cyan-400" },
+  PC_DEPARTMENT:         { label: "Primary Contact · Dept", className: "bg-sky-500/20 text-sky-200",      dot: "bg-sky-400" },
   PC_TEAM:               { label: "Primary Contact · Team", className: "bg-teal-500/20 text-teal-200",    dot: "bg-teal-400" },
   ASSESSMENT_CONSULTANT: { label: "Assessment Consultant",  className: "bg-amber-500/20 text-amber-200",  dot: "bg-amber-400" },
   MEMBER:                { label: "Member",                 className: "bg-green-500/20 text-green-200",  dot: "bg-green-400" },

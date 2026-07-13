@@ -19,9 +19,11 @@ from app.models.user import User, UserRole
 
 def _role_for_unit_type(unit_type: str) -> UserRole:
     """Which Primary Contact role a user gets when assigned to a unit."""
-    if unit_type == "TEAM":
-        return UserRole.PC_TEAM
-    return UserRole.PC_BUSINESS_UNIT  # BUSINESS_UNIT / DEPARTMENT / other
+    return {
+        "BUSINESS_UNIT": UserRole.PC_BUSINESS_UNIT,
+        "DEPARTMENT": UserRole.PC_DEPARTMENT,
+        "TEAM": UserRole.PC_TEAM,
+    }.get(unit_type, UserRole.PC_BUSINESS_UNIT)
 
 
 async def _assign_unit_contact(db: AsyncSession, unit: OrgUnit) -> None:

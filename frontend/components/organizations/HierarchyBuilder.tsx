@@ -35,7 +35,15 @@ interface DimensionOption {
 interface ContactOption {
   id: string;
   label: string;
+  role: string;
 }
+
+// The Primary-Contact role required to appear in each node's contact dropdown.
+const PC_ROLE_BY_UNIT: Record<string, string> = {
+  BUSINESS_UNIT: "PC_BUSINESS_UNIT",
+  DEPARTMENT: "PC_DEPARTMENT",
+  TEAM: "PC_TEAM",
+};
 
 interface Props {
   units: LocalUnit[];
@@ -243,20 +251,23 @@ function UnitRow({
           <DimDropdown unit={unit} dimensions={dimensions} onChange={onDimChange} />
         )}
 
-        {/* Primary contact */}
-        {contacts.length > 0 && !readOnly && (
-          <select
-            value={unit.primary_contact_id ?? ""}
-            onChange={(e) => onContactChange(unit.id, e.target.value || null)}
-            title="Primary contact for this unit"
-            className="max-w-[10rem] text-xs text-grey-500 border border-grey-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-velvet shrink-0 bg-white"
-          >
-            <option value="">Primary contact…</option>
-            {contacts.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
-        )}
+        {/* Primary contact — only users whose role matches this unit level */}
+        {!readOnly && (() => {
+          const eligible = contacts.filter((c) => c.role === PC_ROLE_BY_UNIT[unit.unit_type]);
+          return (
+            <select
+              value={unit.primary_contact_id ?? ""}
+              onChange={(e) => onContactChange(unit.id, e.target.value || null)}
+              title="Primary contact for this unit"
+              className="max-w-[11rem] text-xs text-grey-500 border border-grey-200 rounded px-1.5 py-0.5 focus:outline-none focus:border-velvet shrink-0 bg-white"
+            >
+              <option value="">Primary contact…</option>
+              {eligible.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </select>
+          );
+        })()}
 
         {/* Actions (shown on hover) */}
         {!readOnly && (
