@@ -6,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { ROLE_LABEL, type UserRole, type UserOut, type UserCreateResult } from "@/types/user";
 
 const ROLES: UserRole[] = [
-  "ADMINISTRATOR", "PC_ORGANIZATION", "PC_BUSINESS_UNIT", "PC_TEAM",
+  "ADMINISTRATOR", "PC_ORGANIZATION", "PC_BUSINESS_UNIT", "PC_DEPARTMENT", "PC_TEAM",
   "ASSESSMENT_CONSULTANT", "MEMBER", "VIEWER",
 ];
 

@@ -91,7 +91,7 @@ export default function OrganizationDetailPage() {
   const [editIndustry, setEditIndustry] = useState("");
   const [units, setUnits] = useState<LocalUnit[]>([]);
   const [dimensions, setDimensions] = useState<{ code: string; name: string }[]>([]);
-  const [contacts, setContacts] = useState<{ id: string; label: string }[]>([]);
+  const [contacts, setContacts] = useState<{ id: string; label: string; role: string }[]>([]);
   const [editContactId, setEditContactId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -112,7 +112,7 @@ export default function OrganizationDetailPage() {
       .catch(() => {});
     // Users for primary-contact dropdowns (admin-only endpoint).
     api.get<UserOut[]>("/users")
-      .then((us) => setContacts(us.map((u) => ({ id: u.id, label: u.name ?? u.username ?? u.email }))))
+      .then((us) => setContacts(us.map((u) => ({ id: u.id, label: u.name ?? u.username ?? u.email, role: u.role }))))
       .catch(() => {});
   }, [id]);
 
@@ -234,7 +234,7 @@ export default function OrganizationDetailPage() {
                 className="w-full px-3 py-2 text-sm border border-grey-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-velvet/30 focus:border-velvet bg-white"
               >
                 <option value="">No organization primary contact</option>
-                {contacts.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {contacts.filter((c) => c.role === "PC_ORGANIZATION").map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
               <p className="text-xs text-grey-400 mt-1">Sees assessments &amp; reports across all business units.</p>
             </div>
