@@ -24,6 +24,10 @@ class Organization(Base):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     industry: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Organization-level Primary Contact (PC_ORGANIZATION) — sees the whole org.
+    primary_contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -48,6 +52,11 @@ class OrgUnit(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     competency_codes: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     active_dimension_codes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Primary Contact for this unit (PC_BUSINESS_UNIT / PC_TEAM) — sees this
+    # unit and everything beneath it.
+    primary_contact_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     organization: Mapped[Organization] = relationship("Organization", back_populates="units")
     parent: Mapped[OrgUnit | None] = relationship(

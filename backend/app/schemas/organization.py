@@ -13,6 +13,7 @@ class OrgUnitCreate(BaseModel):
     sort_order: int = 0
     competency_codes: list[str] = Field(default_factory=list)
     active_dimension_codes: list[str] | None = None
+    primary_contact_id: UUID | None = None
 
 
 class OrgUnitUpdate(BaseModel):
@@ -22,6 +23,7 @@ class OrgUnitUpdate(BaseModel):
     sort_order: int | None = None
     competency_codes: list[str] | None = None
     active_dimension_codes: list[str] | None = None
+    primary_contact_id: UUID | None = None
 
 
 class OrgUnitOut(BaseModel):
@@ -33,6 +35,7 @@ class OrgUnitOut(BaseModel):
     sort_order: int
     competency_codes: list[str]
     active_dimension_codes: list[str] | None = None
+    primary_contact_id: UUID | None = None
     children: list[OrgUnitOut] = []
 
     model_config = {"from_attributes": True}
@@ -49,6 +52,7 @@ class OrganizationCreate(BaseModel):
 class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, max_length=255)
     industry: str | None = Field(default=None, max_length=100)
+    primary_contact_id: UUID | None = None
 
 
 class OrganizationOut(BaseModel):
@@ -56,6 +60,7 @@ class OrganizationOut(BaseModel):
     tenant_id: UUID
     name: str
     industry: str | None
+    primary_contact_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
     units: list[OrgUnitOut] = []

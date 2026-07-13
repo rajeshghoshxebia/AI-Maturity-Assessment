@@ -14,6 +14,24 @@ from app.core.permissions import ADMIN, can_see_org, require_roles
 from app.core.tenant import apply_rls
 from app.db.session import get_db
 from app.models.organization import Organization, OrgUnit
+from app.models.user import User, UserRole
+
+
+def _role_for_unit_type(unit_type: str) -> UserRole:
+    """Which Primary Contact role a user gets when assigned to a unit."""
+    if unit_type == "TEAM":
+        return UserRole.PC_TEAM
+    return UserRole.PC_BUSINESS_UNIT  # BUSINESS_UNIT / DEPARTMENT / other
+
+
+async def _assign_unit_contact(db: AsyncSession, unit: OrgUnit) -> None:
+    """Sync the assigned user's role + primary org unit to match the unit."""
+    if not unit.primary_contact_id:
+        return
+    user = await db.get(User, unit.primary_contact_id)
+    if user is not None:
+        user.role = _role_for_unit_type(unit.unit_type)
+        user.primary_org_unit_id = unit.id
 from app.schemas.organization import (
     OrganizationCreate, OrganizationUpdate, OrganizationOut, OrganizationListOut,
     OrgUnitCreate, OrgUnitUpdate, OrgUnitOut,
@@ -38,6 +56,7 @@ def _build_tree(units: list[OrgUnit]) -> list[OrgUnitOut]:
             sort_order=u.sort_order,
             competency_codes=u.competency_codes or [],
             active_dimension_codes=u.active_dimension_codes,
+            primary_contact_id=u.primary_contact_id,
             children=[],
         )
     roots: list[OrgUnitOut] = []
@@ -116,7 +135,8 @@ async def create_organization(
     await db.refresh(org)
     return OrganizationOut(
         id=org.id, tenant_id=org.tenant_id, name=org.name,
-        industry=org.industry, created_at=org.created_at, updated_at=org.updated_at,
+        industry=org.industry, primary_contact_id=org.primary_contact_id,
+        created_at=org.created_at, updated_at=org.updated_at,
         units=[],
     )
 
@@ -130,7 +150,8 @@ async def get_organization(
     org = await _get_org(org_id, user, db)
     return OrganizationOut(
         id=org.id, tenant_id=org.tenant_id, name=org.name,
-        industry=org.industry, created_at=org.created_at, updated_at=org.updated_at,
+        industry=org.industry, primary_contact_id=org.primary_contact_id,
+        created_at=org.created_at, updated_at=org.updated_at,
         units=_build_tree(org.units),
     )
 
@@ -147,11 +168,19 @@ async def update_organization(
         org.name = body.name
     if body.industry is not None:
         org.industry = body.industry
+    if "primary_contact_id" in body.model_fields_set:
+        org.primary_contact_id = body.primary_contact_id
+        if body.primary_contact_id:
+            contact = await db.get(User, body.primary_contact_id)
+            if contact is not None:
+                contact.role = UserRole.PC_ORGANIZATION
+                contact.primary_org_unit_id = None  # org-level, not a specific unit
     await db.commit()
     await db.refresh(org)
     return OrganizationOut(
         id=org.id, tenant_id=org.tenant_id, name=org.name,
-        industry=org.industry, created_at=org.created_at, updated_at=org.updated_at,
+        industry=org.industry, primary_contact_id=org.primary_contact_id,
+        created_at=org.created_at, updated_at=org.updated_at,
         units=_build_tree(org.units),
     )
 
@@ -187,15 +216,19 @@ async def create_unit(
         sort_order=body.sort_order,
         competency_codes=body.competency_codes,
         active_dimension_codes=body.active_dimension_codes,
+        primary_contact_id=body.primary_contact_id,
     )
     db.add(unit)
+    await db.flush()
+    await _assign_unit_contact(db, unit)
     await db.commit()
     await db.refresh(unit)
     return OrgUnitOut(
         id=unit.id, org_id=unit.org_id, parent_id=unit.parent_id,
         name=unit.name, unit_type=unit.unit_type,
         sort_order=unit.sort_order, competency_codes=unit.competency_codes,
-        active_dimension_codes=unit.active_dimension_codes, children=[],
+        active_dimension_codes=unit.active_dimension_codes,
+        primary_contact_id=unit.primary_contact_id, children=[],
     )
 
 
@@ -224,13 +257,18 @@ async def update_unit(
         unit.competency_codes = body.competency_codes
     if "active_dimension_codes" in body.model_fields_set:
         unit.active_dimension_codes = body.active_dimension_codes
+    if "primary_contact_id" in body.model_fields_set:
+        unit.primary_contact_id = body.primary_contact_id
+        await db.flush()
+        await _assign_unit_contact(db, unit)
     await db.commit()
     await db.refresh(unit)
     return OrgUnitOut(
         id=unit.id, org_id=unit.org_id, parent_id=unit.parent_id,
         name=unit.name, unit_type=unit.unit_type,
         sort_order=unit.sort_order, competency_codes=unit.competency_codes,
-        active_dimension_codes=unit.active_dimension_codes, children=[],
+        active_dimension_codes=unit.active_dimension_codes,
+        primary_contact_id=unit.primary_contact_id, children=[],
     )
 
 
